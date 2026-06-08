@@ -299,7 +299,7 @@ export default function CineAlert() {
               { id: "prefs",    label: "Preferences" },
               { id: "releases", label: "Upcoming" },
               { id: "released", label: "Releases" },
-              { id: "alerts",   label: "Alerts" },
+              // { id: "alerts",   label: "Alerts" },
             ].map(tab_ => (
               <button key={tab_.id} onClick={() => setTab(tab_.id)} style={{
                 padding: "9px 20px", fontSize: 13, border: "none", borderRadius: "10px 10px 0 0",

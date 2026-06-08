@@ -255,16 +255,19 @@ async def trigger_scan():
 async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, days_ahead: int, limit: int = 5):
     today = date.today()
     future = today + timedelta(days=days_ahead)
+    is_tv = media_type not in ("movie", "Movies")
+    date_gte_key = "first_air_date.gte" if is_tv else "primary_release_date.gte"
+    date_lte_key = "first_air_date.lte" if is_tv else "primary_release_date.lte"
     params = {
         "api_key": TMDB_KEY,
         "with_original_language": lang,
-        "primary_release_date.gte": today.isoformat(),
-        "primary_release_date.lte": future.isoformat(),
+        date_gte_key: today.isoformat(),
+        date_lte_key: future.isoformat(),
         "sort_by": "popularity.desc",
         "region": "IN",
         "page": 1,
     }
-    endpoint = f"{TMDB_BASE}/discover/{'movie' if media_type in ('movie', 'Movies') else 'tv'}"
+    endpoint = f"{TMDB_BASE}/discover/{'tv' if is_tv else 'movie'}"
     r = await client.get(endpoint, params=params, timeout=10)
     r.raise_for_status()
     data = r.json()

@@ -40,15 +40,23 @@ load_dotenv()
 # ── Config ────────────────────────────────────────────────────────────────────
 TMDB_BASE        = "https://api.themoviedb.org/3"
 TMDB_KEY         = os.getenv("TMDB_API_KEY")
-WATCHMODE_API_KEY = os.getenv("WATCHMODE_API_KEY")   # watchmode.com
+WATCHMODE_API_KEY  = os.getenv("WATCHMODE_API_KEY")   # watchmode.com
+MOTN_API_KEY       = os.getenv("MOTN_API_KEY")        # RapidAPI — Streaming Availability (MovieOfTheNight)
 
-# Watchmode source IDs (US-catalogue; Indian platforms not covered)
+# Watchmode source IDs for global platforms
 WATCHMODE_SOURCE_MAP = {
     "netflix": 203,
     "prime":   26,
     "disney":  372,
     "apple":   371,
     "hbo":     387,
+}
+
+# MovieOfTheNight catalog IDs for Indian platforms
+MOTN_CATALOG_MAP = {
+    "hotstar": "hotstar",
+    "zee5":    "zee5",
+    "sonyliv": "sonyliv",
 }
 DB_URL     = os.getenv("DATABASE_URL")
 TG_TOKEN      = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -256,66 +264,121 @@ async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, 
 
 @app.get("/streaming-upcoming")
 async def get_streaming_upcoming(platforms: str = "", days_ahead: int = 45):
-    """Return shows arriving soon on streaming platforms, sourced from Watchmode."""
-    if not WATCHMODE_API_KEY:
-        return {"items": [], "error": "WATCHMODE_API_KEY not configured"}
-
-    platform_list = [p.strip() for p in platforms.split(",")] if platforms else list(WATCHMODE_SOURCE_MAP.keys())
-    source_ids = [WATCHMODE_SOURCE_MAP[p] for p in platform_list if p in WATCHMODE_SOURCE_MAP]
-    if not source_ids:
-        return {"items": []}
+    """Return shows arriving soon — Watchmode for global platforms, MOTN for Indian platforms."""
+    platform_list = [p.strip() for p in platforms.split(",")] if platforms else list(WATCHMODE_SOURCE_MAP.keys()) + list(MOTN_CATALOG_MAP.keys())
 
     today  = date.today()
     future = today + timedelta(days=days_ahead)
+    items  = []
 
-    # Reverse map: source_id → platform key
+    async with httpx.AsyncClient() as client:
+        tasks = []
+
+        # Watchmode — global platforms
+        watchmode_source_ids = [WATCHMODE_SOURCE_MAP[p] for p in platform_list if p in WATCHMODE_SOURCE_MAP]
+        if WATCHMODE_API_KEY and watchmode_source_ids:
+            tasks.append(_fetch_watchmode(client, watchmode_source_ids, today, future))
+
+        # MOTN — Indian platforms
+        motn_catalogs = [MOTN_CATALOG_MAP[p] for p in platform_list if p in MOTN_CATALOG_MAP]
+        if MOTN_API_KEY and motn_catalogs:
+            tasks.append(_fetch_motn(client, motn_catalogs, days_ahead))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for r in results:
+        if isinstance(r, list):
+            items.extend(r)
+    if not tasks:
+        return {"items": []}
+
+    # Deduplicate by title+platform, sort by date
+    seen, unique = set(), []
+    for item in sorted(items, key=lambda x: x.get("available_date") or "9999-99-99"):
+        key = (item["title"], item["platform"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+
+    return {"items": unique}
+
+
+async def _fetch_watchmode(client: httpx.AsyncClient, source_ids: list, today: date, future: date) -> list:
     id_to_key = {v: k for k, v in WATCHMODE_SOURCE_MAP.items()}
-
     try:
-        async with httpx.AsyncClient() as client:
+        r = await client.get(
+            "https://api.watchmode.com/v1/releases/",
+            params={
+                "apiKey":     WATCHMODE_API_KEY,
+                "start_date": today.strftime("%Y%m%d"),
+                "end_date":   future.strftime("%Y%m%d"),
+                "source_ids": ",".join(str(s) for s in source_ids),
+            },
+            timeout=15,
+        )
+        r.raise_for_status()
+        items = []
+        for rel in r.json().get("releases", []):
+            raw_date = str(rel.get("release_date", ""))
+            avail_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}" if len(raw_date) == 8 else None
+            items.append({
+                "title":          rel.get("title"),
+                "overview":       "",
+                "poster":         rel.get("poster_url"),
+                "media_type":     "movie" if "movie" in (rel.get("type") or "") else "tv",
+                "platform":       id_to_key.get(rel.get("source_id"), str(rel.get("source_id"))),
+                "platform_name":  rel.get("source_name"),
+                "available_date": avail_date,
+                "link":           None,
+            })
+        return items
+    except Exception:
+        return []
+
+
+async def _fetch_motn(client: httpx.AsyncClient, catalogs: list, days_ahead: int) -> list:
+    now    = int(datetime.utcnow().timestamp())
+    future = int((datetime.utcnow() + timedelta(days=days_ahead)).timestamp())
+    headers = {
+        "X-RapidAPI-Key":  MOTN_API_KEY,
+        "X-RapidAPI-Host": "streaming-availability.p.rapidapi.com",
+    }
+    items = []
+    for catalog in catalogs:
+        try:
             r = await client.get(
-                "https://api.watchmode.com/v1/releases/",
+                "https://streaming-availability.p.rapidapi.com/changes",
                 params={
-                    "apiKey":     WATCHMODE_API_KEY,
-                    "start_date": today.strftime("%Y%m%d"),
-                    "end_date":   future.strftime("%Y%m%d"),
-                    "source_ids": ",".join(str(s) for s in source_ids),
+                    "country":        "in",
+                    "catalogs":       catalog,
+                    "changeType":     "new",
+                    "itemType":       "show",
+                    "from":           now,
+                    "to":             future,
+                    "orderDirection": "asc",
                 },
+                headers=headers,
                 timeout=15,
             )
             r.raise_for_status()
-            data = r.json()
-    except Exception:
-        return {"items": []}
-
-    seen, items = set(), []
-    for rel in data.get("releases", []):
-        source_id = rel.get("source_id")
-        title     = rel.get("title")
-        key       = (title, source_id)
-        if key in seen:
+            for change in r.json().get("changes", []):
+                show = change.get("show", {})
+                for opt in show.get("streamingOptions", {}).get("in", []):
+                    avail_ts = opt.get("availableFrom")
+                    service  = opt.get("service", {})
+                    items.append({
+                        "title":          show.get("title"),
+                        "overview":       (show.get("overview") or "")[:200],
+                        "poster":         ((show.get("imageSet") or {}).get("verticalPoster") or {}).get("w480"),
+                        "media_type":     "movie" if change.get("showType") == "movie" else "tv",
+                        "platform":       service.get("id"),
+                        "platform_name":  service.get("name"),
+                        "available_date": datetime.utcfromtimestamp(avail_ts).strftime("%Y-%m-%d") if avail_ts else None,
+                        "link":           opt.get("link"),
+                    })
+        except Exception:
             continue
-        seen.add(key)
-
-        raw_date = str(rel.get("release_date", ""))
-        avail_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}" if len(raw_date) == 8 else None
-
-        media_raw = rel.get("type", "")
-        media_type = "movie" if "movie" in media_raw else "tv"
-
-        items.append({
-            "title":          title,
-            "overview":       "",
-            "poster":         rel.get("poster_url"),
-            "media_type":     media_type,
-            "platform":       id_to_key.get(source_id, str(source_id)),
-            "platform_name":  rel.get("source_name"),
-            "available_date": avail_date,
-            "link":           None,
-        })
-
-    items.sort(key=lambda x: x.get("available_date") or "9999-99-99")
-    return {"items": items}
+    return items
 
 
 @app.post("/scan")

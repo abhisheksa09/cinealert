@@ -264,6 +264,24 @@ async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, 
     return results
 
 
+@app.get("/debug-watchmode")
+async def debug_watchmode():
+    """Temporary: expose raw Watchmode response to inspect field names."""
+    if not WATCHMODE_API_KEY:
+        return {"error": "no key"}
+    today  = date.today()
+    future = today + timedelta(days=7)
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            "https://api.watchmode.com/v1/releases/",
+            params={"apiKey": WATCHMODE_API_KEY, "start_date": today.strftime("%Y%m%d"), "end_date": future.strftime("%Y%m%d")},
+            timeout=15,
+        )
+    data = r.json()
+    releases = data.get("releases", [])
+    return {"first_3": releases[:3], "total": len(releases)}
+
+
 @app.get("/streaming-upcoming")
 async def get_streaming_upcoming(platforms: str = "", days_ahead: int = 45):
     """Return shows arriving soon — Watchmode for global platforms, MOTN for Indian platforms."""

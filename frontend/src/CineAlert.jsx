@@ -200,8 +200,6 @@ export default function CineAlert() {
 
   useEffect(() => {
     if (tab !== "releases") return;
-
-    // TMDB upcoming
     setLoadingReleases(true);
     const wantMovie = types.includes("Movies");
     const wantTV = types.includes("Series") || types.includes("Anime") || types.includes("Documentaries");
@@ -210,13 +208,15 @@ export default function CineAlert() {
     if (wantTV)    fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=tv`).then(d => d?.releases || []));
     if (!fetches.length) { setReleases([]); setLoadingReleases(false); }
     else Promise.all(fetches).then(results => setReleases(results.flat())).finally(() => setLoadingReleases(false));
+  }, [tab, languages, platforms, types]);
 
-    // Streaming Availability upcoming
+  useEffect(() => {
+    if (tab !== "streaming") return;
     setLoadingStreaming(true);
     fetchWithRetry(`${API_BASE}/streaming-upcoming?platforms=${platforms.join(",")}&country=in`)
       .then(d => setStreamingItems(d?.items || []))
       .finally(() => setLoadingStreaming(false));
-  }, [tab, languages, platforms, types]);
+  }, [tab, platforms]);
 
   useEffect(() => {
     if (tab !== "released") return;
@@ -289,6 +289,7 @@ export default function CineAlert() {
           <div style={{ display: "flex", gap: 4 }}>
             {[
               { id: "releases", label: "Upcoming" },
+              { id: "streaming", label: "Streaming" },
               { id: "released", label: "Releases" },
             ].map(tab_ => (
               <button key={tab_.id} onClick={() => setTab(tab_.id)} style={{
@@ -319,8 +320,6 @@ export default function CineAlert() {
             if (filterType !== "all" && r[typeKey] !== filterType) return false;
             return true;
           };
-
-          const filteredStreaming = streamingItems.filter(r => matchesFilter(r));
 
           const filtered = releases
             .filter(r => matchesFilter(r))
@@ -443,7 +442,7 @@ export default function CineAlert() {
               {/* ── Results count ── */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <span style={{ fontSize: 13, color: t.textMuted }}>
-                  {loadingReleases ? "Loading…" : `${filteredStreaming.length + filtered.length}${hasActiveFilter ? ` of ${streamingItems.length + releases.length}` : ""} titles`}
+                  {loadingReleases ? "Loading…" : `${filtered.length}${hasActiveFilter ? ` of ${releases.length}` : ""} titles`}
                 </span>
                 {hasActiveFilter && (
                   <button onClick={() => { setFilterSearch(""); setFilterType("all"); }} style={{
@@ -452,76 +451,6 @@ export default function CineAlert() {
                 )}
               </div>
 
-              {/* ── Streaming Soon section ── */}
-              {(loadingStreaming || filteredStreaming.length > 0) && (
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: t.sectionLabel, letterSpacing: "0.06em", textTransform: "uppercase" }}>Streaming Soon</div>
-                    <div style={{ flex: 1, height: 1, background: t.cardBorder }} />
-                    {loadingStreaming && <div style={{ fontSize: 10, color: t.textMuted }}>Loading…</div>}
-                  </div>
-
-                  {loadingStreaming && streamingItems.length === 0 ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {[1,2,3].map(i => (
-                        <div key={i} style={{ height: 76, borderRadius: 14, background: t.cardBg, border: `1px solid ${t.cardBorder}`, opacity: 0.5 }} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {filteredStreaming.map((item, i) => {
-                        const meta = PLATFORM_META[item.platform] || { label: item.platform_name || item.platform, color: "#7c3aed", icon: "▶" };
-                        const dateStr = item.available_date
-                          ? new Date(item.available_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-                          : "Coming Soon";
-                        return (
-                          <a key={i} href={item.link || `https://www.themoviedb.org/search?query=${encodeURIComponent(item.title)}`} target="_blank" rel="noreferrer" style={{
-                            display: "flex", gap: 14, padding: "12px 14px",
-                            background: t.cardBg, border: `1px solid ${t.cardBorder}`,
-                            borderRadius: 14, textDecoration: "none", cursor: "pointer",
-                            transition: "border-color 0.2s, box-shadow 0.2s",
-                          }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = meta.color; e.currentTarget.style.boxShadow = `0 0 0 1px ${meta.color}22`; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = t.cardBorder; e.currentTarget.style.boxShadow = "none"; }}
-                          >
-                            {item.poster ? (
-                              <img src={item.poster} alt={item.title} style={{ width: 44, height: 60, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
-                            ) : (
-                              <div style={{ width: 44, height: 60, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🎬</div>
-                            )}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
-                              <div style={{ marginTop: 5 }}>
-                                <span style={{
-                                  display: "inline-flex", alignItems: "center", gap: 5,
-                                  fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 6,
-                                  background: meta.color + "18", color: meta.color,
-                                  border: `1px solid ${meta.color}44`,
-                                }}>
-                                  <span style={{ fontSize: 9 }}>⏰</span>
-                                  Coming to {meta.label} · {dateStr}
-                                </span>
-                              </div>
-                              {item.overview && <div style={{ fontSize: 11, color: t.textMuted, marginTop: 5, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.overview}</div>}
-                            </div>
-                            <div style={{ flexShrink: 0 }}>
-                              <span style={{ fontSize: 11, color: t.textMuted, textTransform: "capitalize", background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{item.media_type}</span>
-                            </div>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Theatrical / TV Upcoming ── */}
-              {(releases.length > 0 || loadingReleases) && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: t.sectionLabel, letterSpacing: "0.06em", textTransform: "uppercase" }}>Theatrical & TV Premieres</div>
-                  <div style={{ flex: 1, height: 1, background: t.cardBorder }} />
-                </div>
-              )}
 
               {/* ── Cards ── */}
               {filtered.length === 0 && !loadingReleases ? (
@@ -587,6 +516,143 @@ export default function CineAlert() {
                         </div>
                         <div style={{ flexShrink: 0, textAlign: "right" }}>
                           <div style={{ fontSize: 11, color: t.textSecondary, background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{r.release_date || "TBA"}</div>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* STREAMING TAB */}
+        {tab === "streaming" && (() => {
+          const filteredStreaming = streamingItems.filter(r => {
+            if (filterSearch) {
+              const q = filterSearch.toLowerCase();
+              if (!(r.title || "").toLowerCase().includes(q) && !(r.overview || "").toLowerCase().includes(q)) return false;
+            }
+            if (filterType !== "all" && r.media_type !== filterType) return false;
+            return true;
+          });
+          const hasActiveFilter = filterSearch || filterType !== "all";
+
+          return (
+            <div>
+              {/* Filter bar */}
+              <div style={{
+                background: t.cardBg, border: `1px solid ${t.cardBorder}`,
+                borderRadius: 14, padding: "12px 14px", marginBottom: 14,
+                display: "flex", flexDirection: "column", gap: 10,
+              }}>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: t.textMuted, pointerEvents: "none" }}>🔍</span>
+                  <input
+                    value={filterSearch}
+                    onChange={e => setFilterSearch(e.target.value)}
+                    placeholder="Search titles…"
+                    style={{ width: "100%", padding: "8px 10px 8px 32px", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 8, color: t.text, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                  />
+                  {filterSearch && (
+                    <button onClick={() => setFilterSearch("")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: t.textMuted, fontSize: 14, lineHeight: 1 }}>✕</button>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  {[{ val: "all", label: "All" }, { val: "movie", label: "🎬 Movies" }, { val: "tv", label: "📺 Series" }].map(opt => (
+                    <button key={opt.val} onClick={() => setFilterType(opt.val)} style={{
+                      padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: filterType === opt.val ? 700 : 400,
+                      border: filterType === opt.val ? "1.5px solid #7c3aed" : `1.5px solid ${t.cardBorder}`,
+                      background: filterType === opt.val ? "#7c3aed" : t.inputBg,
+                      color: filterType === opt.val ? "#fff" : t.textMuted,
+                      cursor: "pointer", transition: "all 0.18s",
+                    }}>{opt.label}</button>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Platforms</span>
+                  {PLATFORMS.map(p => {
+                    const on = platforms.includes(p.id);
+                    const meta = PLATFORM_META[p.id];
+                    return (
+                      <button key={p.id} onClick={() => toggleSet(platforms, setPlatforms, p.id)} title={p.label} style={{
+                        width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer",
+                        background: on ? p.color : t.inputBg,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        transition: "all 0.18s", overflow: "hidden", flexShrink: 0,
+                        boxShadow: on ? `0 0 0 2px ${p.color}55` : `0 0 0 1px ${t.cardBorder}`,
+                        opacity: on ? 1 : 0.45,
+                      }}>
+                        {meta?.logo
+                          ? <img src={meta.logo} alt={p.label} style={{ width: 18, height: 18, objectFit: "contain", borderRadius: 3 }} />
+                          : <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>{meta?.icon}</span>
+                        }
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Results count */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <span style={{ fontSize: 13, color: t.textMuted }}>
+                  {loadingStreaming ? "Loading…" : `${filteredStreaming.length}${hasActiveFilter ? ` of ${streamingItems.length}` : ""} titles`}
+                </span>
+                {hasActiveFilter && (
+                  <button onClick={() => { setFilterSearch(""); setFilterType("all"); }} style={{ fontSize: 11, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕ Clear filters</button>
+                )}
+              </div>
+
+              {loadingStreaming && streamingItems.length === 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[1,2,3].map(i => (
+                    <div key={i} style={{ height: 76, borderRadius: 14, background: t.cardBg, border: `1px solid ${t.cardBorder}`, opacity: 0.5 }} />
+                  ))}
+                </div>
+              ) : filteredStreaming.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "3rem 2rem", background: t.cardBg, borderRadius: 16, border: `1px solid ${t.cardBorder}`, color: t.textMuted }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>📺</div>
+                  <div style={{ fontSize: 14 }}>No streaming titles match your filters.</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {filteredStreaming.map((item, i) => {
+                    const meta = PLATFORM_META[item.platform] || { label: item.platform_name || item.platform, color: "#7c3aed", icon: "▶" };
+                    const dateStr = item.available_date
+                      ? new Date(item.available_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                      : "Coming Soon";
+                    return (
+                      <a key={i} href={item.link || `https://www.themoviedb.org/search?query=${encodeURIComponent(item.title)}`} target="_blank" rel="noreferrer" style={{
+                        display: "flex", gap: 14, padding: "12px 14px",
+                        background: t.cardBg, border: `1px solid ${t.cardBorder}`,
+                        borderRadius: 14, textDecoration: "none", cursor: "pointer",
+                        transition: "border-color 0.2s, box-shadow 0.2s",
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = meta.color; e.currentTarget.style.boxShadow = `0 0 0 1px ${meta.color}22`; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = t.cardBorder; e.currentTarget.style.boxShadow = "none"; }}
+                      >
+                        {item.poster ? (
+                          <img src={item.poster} alt={item.title} style={{ width: 44, height: 60, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                        ) : (
+                          <div style={{ width: 44, height: 60, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🎬</div>
+                        )}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
+                          <div style={{ marginTop: 5 }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 6,
+                              background: meta.color + "18", color: meta.color,
+                              border: `1px solid ${meta.color}44`,
+                            }}>
+                              <span style={{ fontSize: 9 }}>⏰</span>
+                              Coming to {meta.label} · {dateStr}
+                            </span>
+                          </div>
+                          {item.overview && <div style={{ fontSize: 11, color: t.textMuted, marginTop: 5, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.overview}</div>}
+                        </div>
+                        <div style={{ flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, color: t.textMuted, textTransform: "capitalize", background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{item.media_type}</span>
                         </div>
                       </a>
                     );

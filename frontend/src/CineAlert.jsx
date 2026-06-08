@@ -137,6 +137,17 @@ function PlatformBadge({ platformKey }) {
 
 const STORAGE_KEY = "cinealert_prefs";
 
+async function fetchWithRetry(url, retries = 3, delayMs = 20000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) return r.json();
+    } catch {}
+    if (i < retries - 1) await new Promise(res => setTimeout(res, delayMs));
+  }
+  return null;
+}
+
 function loadPrefs() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -188,10 +199,8 @@ export default function CineAlert() {
     if (tab !== "releases") return;
     setLoadingReleases(true);
     const mediaType = types.includes("Movies") ? "movie" : "tv";
-    fetch(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=${mediaType}`)
-      .then(r => r.json())
-      .then(data => setReleases(data.releases || []))
-      .catch(() => setReleases([]))
+    fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=${mediaType}`)
+      .then(data => setReleases(data?.releases || []))
       .finally(() => setLoadingReleases(false));
   }, [tab, languages, platforms, types]);
 
@@ -199,10 +208,8 @@ export default function CineAlert() {
     if (tab !== "released") return;
     setLoadingReleased(true);
     const mediaType = types.includes("Movies") ? "movie" : "tv";
-    fetch(`${API_BASE}/released?languages=${languages.join(",")}&media_type=${mediaType}&from_year=2020`)
-      .then(r => r.json())
-      .then(data => setReleased(data.releases || []))
-      .catch(() => setReleased([]))
+    fetchWithRetry(`${API_BASE}/released?languages=${languages.join(",")}&media_type=${mediaType}&from_year=2020`)
+      .then(data => setReleased(data?.releases || []))
       .finally(() => setLoadingReleased(false));
   }, [tab, languages, types]);
 

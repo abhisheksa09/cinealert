@@ -183,6 +183,8 @@ export default function CineAlert() {
   const [saveFlash, setSaveFlash] = useState(false);
   const [releases, setReleases] = useState([]);
   const [loadingReleases, setLoadingReleases] = useState(false);
+  const [streamingItems, setStreamingItems] = useState([]);
+  const [loadingStreaming, setLoadingStreaming] = useState(false);
 
   // Upcoming tab filters
   const [filterLangs, setFilterLangs] = useState([]);
@@ -209,16 +211,22 @@ export default function CineAlert() {
 
   useEffect(() => {
     if (tab !== "releases") return;
+
+    // TMDB upcoming
     setLoadingReleases(true);
     const wantMovie = types.includes("Movies");
     const wantTV = types.includes("Series") || types.includes("Anime") || types.includes("Documentaries");
     const fetches = [];
     if (wantMovie) fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=movie`).then(d => d?.releases || []));
     if (wantTV)    fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=tv`).then(d => d?.releases || []));
-    if (!fetches.length) { setReleases([]); setLoadingReleases(false); return; }
-    Promise.all(fetches)
-      .then(results => setReleases(results.flat()))
-      .finally(() => setLoadingReleases(false));
+    if (!fetches.length) { setReleases([]); setLoadingReleases(false); }
+    else Promise.all(fetches).then(results => setReleases(results.flat())).finally(() => setLoadingReleases(false));
+
+    // Streaming Availability upcoming
+    setLoadingStreaming(true);
+    fetchWithRetry(`${API_BASE}/streaming-upcoming?platforms=${platforms.join(",")}&country=in`)
+      .then(d => setStreamingItems(d?.items || []))
+      .finally(() => setLoadingStreaming(false));
   }, [tab, languages, platforms, types]);
 
   useEffect(() => {
@@ -339,7 +347,8 @@ export default function CineAlert() {
                       display: "flex", alignItems: "center", gap: 10,
                       padding: "10px 14px", borderRadius: 12,
                       border: "none",
-                      background: on ? (isDark ? p.bg : p.color + "18") : t.cardBg,
+                      outline: "none",
+                      background: on ? (isDark ? p.bg : t.cardBg) : t.cardBg,
                       cursor: "pointer", transition: "all 0.2s",
                       boxShadow: "none",
                     }}>
@@ -556,6 +565,77 @@ export default function CineAlert() {
                   }}>✕ Clear all filters</button>
                 )}
               </div>
+
+              {/* ── Streaming Soon section ── */}
+              {(loadingStreaming || streamingItems.length > 0) && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: t.sectionLabel, letterSpacing: "0.06em", textTransform: "uppercase" }}>Streaming Soon</div>
+                    <div style={{ flex: 1, height: 1, background: t.cardBorder }} />
+                    {loadingStreaming && <div style={{ fontSize: 10, color: t.textMuted }}>Loading…</div>}
+                  </div>
+
+                  {loadingStreaming && streamingItems.length === 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {[1,2,3].map(i => (
+                        <div key={i} style={{ height: 76, borderRadius: 14, background: t.cardBg, border: `1px solid ${t.cardBorder}`, opacity: 0.5 }} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {streamingItems.map((item, i) => {
+                        const meta = PLATFORM_META[item.platform] || { label: item.platform_name || item.platform, color: "#7c3aed", icon: "▶" };
+                        const dateStr = item.available_date
+                          ? new Date(item.available_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                          : "Coming Soon";
+                        return (
+                          <a key={i} href={item.link || "#"} target="_blank" rel="noreferrer" style={{
+                            display: "flex", gap: 14, padding: "12px 14px",
+                            background: t.cardBg, border: `1px solid ${t.cardBorder}`,
+                            borderRadius: 14, textDecoration: "none", cursor: "pointer",
+                            transition: "border-color 0.2s, box-shadow 0.2s",
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = meta.color; e.currentTarget.style.boxShadow = `0 0 0 1px ${meta.color}22`; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = t.cardBorder; e.currentTarget.style.boxShadow = "none"; }}
+                          >
+                            {item.poster ? (
+                              <img src={item.poster} alt={item.title} style={{ width: 44, height: 60, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                            ) : (
+                              <div style={{ width: 44, height: 60, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🎬</div>
+                            )}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
+                              <div style={{ marginTop: 5 }}>
+                                <span style={{
+                                  display: "inline-flex", alignItems: "center", gap: 5,
+                                  fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 6,
+                                  background: meta.color + "18", color: meta.color,
+                                  border: `1px solid ${meta.color}44`,
+                                }}>
+                                  <span style={{ fontSize: 9 }}>⏰</span>
+                                  Coming to {meta.label} · {dateStr}
+                                </span>
+                              </div>
+                              {item.overview && <div style={{ fontSize: 11, color: t.textMuted, marginTop: 5, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.overview}</div>}
+                            </div>
+                            <div style={{ flexShrink: 0 }}>
+                              <span style={{ fontSize: 11, color: t.textMuted, textTransform: "capitalize", background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{item.media_type}</span>
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Theatrical / TV Upcoming ── */}
+              {(releases.length > 0 || loadingReleases) && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: t.sectionLabel, letterSpacing: "0.06em", textTransform: "uppercase" }}>Theatrical & TV Premieres</div>
+                  <div style={{ flex: 1, height: 1, background: t.cardBorder }} />
+                </div>
+              )}
 
               {/* ── Cards ── */}
               {filtered.length === 0 && !loadingReleases ? (

@@ -24,7 +24,7 @@ Environment variables (.env):
 
 import os
 import asyncio
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from contextlib import asynccontextmanager
 
 import httpx
@@ -38,8 +38,20 @@ from telegram import Bot
 load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
-TMDB_BASE = "https://api.themoviedb.org/3"
-TMDB_KEY   = os.getenv("TMDB_API_KEY")
+TMDB_BASE        = "https://api.themoviedb.org/3"
+TMDB_KEY         = os.getenv("TMDB_API_KEY")
+STREAMING_API_KEY = os.getenv("STREAMING_API_KEY")   # RapidAPI — Streaming Availability API
+
+STREAMING_CATALOG_MAP = {
+    "netflix": "netflix",
+    "prime":   "prime.subscription",
+    "disney":  "disney",
+    "apple":   "apple",
+    "hbo":     "hbo",
+    "hotstar": "hotstar",
+    "zee5":    "zee5",
+    "sonyliv": "sonyliv",
+}
 DB_URL     = os.getenv("DATABASE_URL")
 TG_TOKEN      = os.getenv("TELEGRAM_BOT_TOKEN")
 RESEND_KEY    = os.getenv("RESEND_API_KEY")
@@ -242,6 +254,74 @@ async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, 
         except Exception:
             break
     return results
+
+
+@app.get("/streaming-upcoming")
+async def get_streaming_upcoming(platforms: str = "", days_ahead: int = 45, country: str = "in"):
+    """Return shows arriving soon on streaming platforms, sourced from Streaming Availability API."""
+    if not STREAMING_API_KEY:
+        return {"items": [], "error": "STREAMING_API_KEY not configured"}
+
+    platform_list = [p.strip() for p in platforms.split(",")] if platforms else list(STREAMING_CATALOG_MAP.keys())
+    catalogs = [STREAMING_CATALOG_MAP[p] for p in platform_list if p in STREAMING_CATALOG_MAP]
+    if not catalogs:
+        return {"items": []}
+
+    now    = int(datetime.utcnow().timestamp())
+    future = int((datetime.utcnow() + timedelta(days=days_ahead)).timestamp())
+    headers = {
+        "X-RapidAPI-Key":  STREAMING_API_KEY,
+        "X-RapidAPI-Host": "streaming-availability.p.rapidapi.com",
+    }
+
+    items = []
+    async with httpx.AsyncClient() as client:
+        for catalog in catalogs:
+            try:
+                r = await client.get(
+                    "https://streaming-availability.p.rapidapi.com/changes",
+                    params={
+                        "country":        country,
+                        "catalogs":       catalog,
+                        "changeType":     "new",
+                        "itemType":       "show",
+                        "from":           now,
+                        "to":             future,
+                        "orderDirection": "asc",
+                    },
+                    headers=headers,
+                    timeout=15,
+                )
+                r.raise_for_status()
+                data = r.json()
+                for change in data.get("changes", []):
+                    show = change.get("show", {})
+                    for opt in show.get("streamingOptions", {}).get(country, []):
+                        available_from = opt.get("availableFrom")
+                        service = opt.get("service", {})
+                        items.append({
+                            "title":          show.get("title"),
+                            "overview":       (show.get("overview") or "")[:200],
+                            "poster":         ((show.get("imageSet") or {}).get("verticalPoster") or {}).get("w480"),
+                            "media_type":     "movie" if change.get("showType") == "movie" else "tv",
+                            "platform":       service.get("id"),
+                            "platform_name":  service.get("name"),
+                            "available_from": available_from,
+                            "available_date": datetime.utcfromtimestamp(available_from).strftime("%Y-%m-%d") if available_from else None,
+                            "link":           opt.get("link"),
+                        })
+            except Exception:
+                continue
+
+    # Sort by date, deduplicate by title+platform
+    seen, unique = set(), []
+    for item in sorted(items, key=lambda x: x.get("available_from") or 9_999_999_999):
+        key = (item["title"], item["platform"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+
+    return {"items": unique}
 
 
 @app.post("/scan")

@@ -589,7 +589,7 @@ export default function CineAlert() {
                           ? new Date(item.available_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
                           : "Coming Soon";
                         return (
-                          <a key={i} href={item.link || "#"} target="_blank" rel="noreferrer" style={{
+                          <a key={i} href={item.link || `https://www.themoviedb.org/search?query=${encodeURIComponent(item.title)}`} target="_blank" rel="noreferrer" style={{
                             display: "flex", gap: 14, padding: "12px 14px",
                             background: t.cardBg, border: `1px solid ${t.cardBorder}`,
                             borderRadius: 14, textDecoration: "none", cursor: "pointer",

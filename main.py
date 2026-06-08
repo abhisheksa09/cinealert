@@ -328,15 +328,17 @@ async def _fetch_watchmode(client: httpx.AsyncClient, source_ids: list, today: d
             if sid not in source_id_set:
                 continue
             avail_date = rel.get("source_release_date")  # already "YYYY-MM-DD"
+            tmdb_id   = rel.get("tmdb_id")
+            tmdb_type = "movie" if "movie" in (rel.get("type") or "") else "tv"
             items.append({
                 "title":          rel.get("title"),
                 "overview":       "",
                 "poster":         rel.get("poster_url"),
-                "media_type":     "movie" if "movie" in (rel.get("type") or "") else "tv",
+                "media_type":     tmdb_type,
                 "platform":       id_to_key.get(sid, str(sid)),
                 "platform_name":  rel.get("source_name"),
                 "available_date": avail_date,
-                "link":           None,
+                "link":           f"https://www.themoviedb.org/{tmdb_type}/{tmdb_id}" if tmdb_id else None,
             })
         return items
     except Exception:

@@ -235,6 +235,7 @@ async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, 
                     "poster": f"https://image.tmdb.org/t/p/w185{item['poster_path']}" if item.get("poster_path") else None,
                     "overview": item.get("overview", "")[:200],
                     "rating": item.get("vote_average"),
+                    "genre_ids": item.get("genre_ids", []),
                 })
             if page >= data.get("total_pages", 1):
                 break
@@ -278,6 +279,7 @@ async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, 
             "poster": f"https://image.tmdb.org/t/p/w185{item['poster_path']}" if item.get("poster_path") else None,
             "overview": item.get("overview", "")[:200],
             "rating": item.get("vote_average"),
+            "genre_ids": item.get("genre_ids", []),
         })
     return results
 

@@ -32,6 +32,15 @@ const LANG_CODES = {
   kn: "Kannada", ko: "Korean", ja: "Japanese", ml: "Malayalam",
 };
 
+const GENRE_MAP = {
+  28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+  99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
+  27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance",
+  878: "Sci-Fi", 53: "Thriller", 10752: "War", 37: "Western",
+  10759: "Action & Adventure", 10762: "Kids", 10763: "News", 10764: "Reality",
+  10765: "Sci-Fi & Fantasy", 10766: "Soap", 10767: "Talk", 10768: "War & Politics",
+};
+
 // Reverse lookup: display name OR key → PLATFORM_META entry
 const PLATFORM_BY_NAME = Object.fromEntries(
   Object.entries(PLATFORM_META).flatMap(([key, meta]) => [
@@ -190,6 +199,7 @@ export default function CineAlert() {
   const [rFilterSort, setRFilterSort] = useState("date");
   const [rFilterSearch, setRFilterSearch] = useState("");
   const [rFilterOpen, setRFilterOpen] = useState(false);
+  const [collapsedYears, setCollapsedYears] = useState({});
 
   const t = THEMES[theme];
   const isDark = theme === "dark";
@@ -288,7 +298,7 @@ export default function CineAlert() {
             {[
               { id: "prefs",    label: "Preferences" },
               { id: "releases", label: "Upcoming" },
-              { id: "released", label: "Released" },
+              { id: "released", label: "Releases" },
               { id: "alerts",   label: "Alerts" },
             ].map(tab_ => (
               <button key={tab_.id} onClick={() => setTab(tab_.id)} style={{
@@ -554,20 +564,22 @@ export default function CineAlert() {
                     const langLabel = code ? (LANG_CODES[code] || code.toUpperCase()) : null;
 
                     return (
-                      <div key={i} style={{
+                      <a key={i} href={r.tmdb_url} target="_blank" rel="noreferrer" style={{
                         display: "flex", gap: 14, padding: "14px",
                         background: t.cardBg, border: `1px solid ${t.cardBorder}`,
-                        borderRadius: 14, transition: "border-color 0.2s",
-                      }}>
+                        borderRadius: 14, transition: "border-color 0.2s, box-shadow 0.2s",
+                        textDecoration: "none", cursor: "pointer",
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "#7c3aed"; e.currentTarget.style.boxShadow = "0 0 0 1px #7c3aed22"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = t.cardBorder; e.currentTarget.style.boxShadow = "none"; }}
+                      >
                         {r.poster ? (
                           <img src={r.poster} alt={r.title} style={{ width: 48, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
                         ) : (
                           <div style={{ width: 48, height: 64, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎬</div>
                         )}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <a href={r.tmdb_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
-                          </a>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
                           <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                             <span style={{ textTransform: "capitalize" }}>{r.media_type}</span>
                             {r.rating ? <><span>·</span><span style={{ color: "#fbbf24" }}>★ {r.rating.toFixed(1)}</span></> : null}
@@ -583,6 +595,13 @@ export default function CineAlert() {
                               </>
                             )}
                           </div>
+                          {r.genre_ids && r.genre_ids.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
+                              {r.genre_ids.slice(0, 3).map(gid => GENRE_MAP[gid]).filter(Boolean).map(g => (
+                                <span key={g} style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: isDark ? "#1e1e35" : "#ede9fe", color: isDark ? "#a78bfa" : "#7c3aed", fontWeight: 500 }}>{g}</span>
+                              ))}
+                            </div>
+                          )}
                           {r.platforms && r.platforms.length > 0 && (
                             <div style={{ display: "flex", gap: 5, marginTop: 7, flexWrap: "wrap" }}>
                               {r.platforms.map(p => <PlatformBadge key={p} platformKey={p} />)}
@@ -593,7 +612,7 @@ export default function CineAlert() {
                         <div style={{ flexShrink: 0, textAlign: "right" }}>
                           <div style={{ fontSize: 11, color: t.textSecondary, background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{r.release_date || "TBA"}</div>
                         </div>
-                      </div>
+                      </a>
                     );
                   })}
                 </div>
@@ -776,8 +795,8 @@ export default function CineAlert() {
                 years.map(yr => (
                   <div key={yr} style={{ marginBottom: 24 }}>
                     {/* Year header */}
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: 10, marginBottom: 10,
+                    <div onClick={() => setCollapsedYears(prev => ({ ...prev, [yr]: !prev[yr] }))} style={{
+                      display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer", userSelect: "none",
                     }}>
                       <div style={{
                         fontSize: 18, fontWeight: 800, color: isDark ? "#fff" : "#1e293b",
@@ -785,28 +804,43 @@ export default function CineAlert() {
                       }}>{yr}</div>
                       <div style={{ flex: 1, height: 1, background: t.cardBorder }} />
                       <div style={{ fontSize: 11, color: t.textMuted, background: t.dateBg, padding: "2px 8px", borderRadius: 6 }}>{byYear[yr].length} titles</div>
+                      <div style={{ fontSize: 11, color: t.textMuted, transition: "transform 0.2s", transform: collapsedYears[yr] ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</div>
                     </div>
 
                     {/* Cards */}
+                    {!collapsedYears[yr] && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {byYear[yr].map((r, i) => {
                         const code = r.language || r.original_language;
                         const langLabel = code ? (LANG_CODES[code] || code.toUpperCase()) : null;
                         return (
-                          <div key={i} style={{ display: "flex", gap: 14, padding: "14px", background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: 14 }}>
+                          <a key={i} href={r.tmdb_url} target="_blank" rel="noreferrer" style={{
+                            display: "flex", gap: 14, padding: "14px",
+                            background: t.cardBg, border: `1px solid ${t.cardBorder}`,
+                            borderRadius: 14, textDecoration: "none", cursor: "pointer",
+                            transition: "border-color 0.2s, box-shadow 0.2s",
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = "#7c3aed"; e.currentTarget.style.boxShadow = "0 0 0 1px #7c3aed22"; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = t.cardBorder; e.currentTarget.style.boxShadow = "none"; }}
+                          >
                             {r.poster
                               ? <img src={r.poster} alt={r.title} style={{ width: 48, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
                               : <div style={{ width: 48, height: 64, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎬</div>
                             }
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <a href={r.tmdb_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-                                <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
-                              </a>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
                               <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                                 <span style={{ textTransform: "capitalize" }}>{r.media_type}</span>
                                 {r.rating ? <><span>·</span><span style={{ color: "#fbbf24" }}>★ {r.rating.toFixed(1)}</span></> : null}
                                 {langLabel && <><span>·</span><span style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4, background: isDark ? "#1e293b" : "#f1f5f9", color: isDark ? "#94a3b8" : "#64748b", border: `1px solid ${t.cardBorder}` }}>{langLabel}</span></>}
                               </div>
+                              {r.genre_ids && r.genre_ids.length > 0 && (
+                                <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
+                                  {r.genre_ids.slice(0, 3).map(gid => GENRE_MAP[gid]).filter(Boolean).map(g => (
+                                    <span key={g} style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: isDark ? "#1e1e35" : "#ede9fe", color: isDark ? "#a78bfa" : "#7c3aed", fontWeight: 500 }}>{g}</span>
+                                  ))}
+                                </div>
+                              )}
                               {r.platforms && r.platforms.length > 0 && (
                                 <div style={{ display: "flex", gap: 5, marginTop: 7, flexWrap: "wrap" }}>
                                   {r.platforms.map(p => <PlatformBadge key={p} platformKey={p} />)}
@@ -817,10 +851,11 @@ export default function CineAlert() {
                             <div style={{ flexShrink: 0, textAlign: "right" }}>
                               <div style={{ fontSize: 11, color: t.textSecondary, background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{r.release_date || "TBA"}</div>
                             </div>
-                          </div>
+                          </a>
                         );
                       })}
                     </div>
+                    )}
                   </div>
                 ))
               )}

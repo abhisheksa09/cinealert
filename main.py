@@ -108,8 +108,20 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 # ── API Routes ────────────────────────────────────────────────────────────────
 PROVIDER_NAMES = {
-    "8": "Netflix", "9": "Prime Video", "337": "Disney+", "350": "Apple TV+",
-    "384": "HBO Max", "122": "Jio Hotstar", "232": "Zee5", "237": "SonyLIV",
+    # Global
+    "8":   "Netflix",
+    "9":   "Prime Video",
+    "337": "Disney+",
+    "350": "Apple TV+",
+    "384": "HBO Max",
+    # India
+    "122": "Jio Hotstar",   # Disney+ Hotstar IN
+    "232": "Zee5",
+    "237": "SonyLIV",
+    "11":  "MUBI",
+    "531": "Paramount+",
+    "257": "SunNXT",
+    "315": "Apple TV+",     # alternate Apple ID in some regions
 }
 
 @app.get("/releases")
@@ -169,14 +181,22 @@ async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, 
     return results
 
 async def get_watch_providers(client: httpx.AsyncClient, tmdb_id: int, media_type: str) -> list[str]:
-    """Return provider IDs available in NL region."""
+    """Return provider IDs available in IN or US region."""
     endpoint = f"{TMDB_BASE}/{'movie' if media_type in ('movie', 'Movies') else 'tv'}/{tmdb_id}/watch/providers"
     r = await client.get(endpoint, params={"api_key": TMDB_KEY}, timeout=10)
     if r.status_code != 200:
         return []
-    data = r.json().get("results", {}).get("NL", {})
-    providers = data.get("flatrate", []) + data.get("free", [])
-    return [str(p["provider_id"]) for p in providers]
+    all_regions = r.json().get("results", {})
+    # Prefer IN (India) — covers Hotstar, Zee5, SonyLIV; fall back to US
+    region_data = all_regions.get("IN") or all_regions.get("US") or {}
+    providers = region_data.get("flatrate", []) + region_data.get("free", []) + region_data.get("ads", [])
+    seen, ids = set(), []
+    for p in providers:
+        pid = str(p["provider_id"])
+        if pid not in seen:
+            seen.add(pid)
+            ids.append(pid)
+    return ids
 
 
 # ── Daily scan ────────────────────────────────────────────────────────────────

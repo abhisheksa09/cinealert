@@ -14,14 +14,14 @@ const PLATFORMS = [
 ];
 
 const PLATFORM_META = {
-  netflix:  { label: "Netflix",     color: "#e50914", icon: "N" },
-  prime:    { label: "Prime Video", color: "#00a8e0", icon: "▶" },
-  disney:   { label: "Disney+",     color: "#4a90e2", icon: "✦" },
-  apple:    { label: "Apple TV+",   color: "#a0a0a0", icon: "" },
-  hbo:      { label: "HBO Max",     color: "#a855f7", icon: "H" },
-  hotstar:  { label: "Jio Hotstar", color: "#1d9bf0", icon: "★" },
-  zee5:     { label: "Zee5",        color: "#9b59b6", icon: "Z" },
-  sonyliv:  { label: "SonyLIV",     color: "#ff4757", icon: "S" },
+  netflix:  { label: "Netflix",     color: "#e50914", icon: "N", logo: "https://www.google.com/s2/favicons?sz=64&domain=netflix.com" },
+  prime:    { label: "Prime Video", color: "#00a8e0", icon: "▶", logo: "https://www.google.com/s2/favicons?sz=64&domain=primevideo.com" },
+  disney:   { label: "Disney+",     color: "#4a90e2", icon: "D+", logo: "https://www.google.com/s2/favicons?sz=64&domain=disneyplus.com" },
+  apple:    { label: "Apple TV+",   color: "#a0a0a0", icon: "🍎", logo: "https://www.google.com/s2/favicons?sz=64&domain=tv.apple.com" },
+  hbo:      { label: "HBO Max",     color: "#a855f7", icon: "H", logo: "https://www.google.com/s2/favicons?sz=64&domain=max.com" },
+  hotstar:  { label: "Jio Hotstar", color: "#1d9bf0", icon: "★", logo: "https://www.google.com/s2/favicons?sz=64&domain=jiohotstar.com" },
+  zee5:     { label: "Zee5",        color: "#9b59b6", icon: "Z", logo: "https://www.google.com/s2/favicons?sz=64&domain=zee5.com" },
+  sonyliv:  { label: "SonyLIV",     color: "#ff4757", icon: "S", logo: "https://www.google.com/s2/favicons?sz=64&domain=sonyliv.com" },
 };
 
 const LANGUAGES = ["Kannada", "Hindi", "English", "Telugu", "Malayalam", "Tamil", "Korean"];
@@ -326,9 +326,13 @@ export default function CineAlert() {
                         width: 28, height: 28, borderRadius: 8,
                         background: on ? p.color : t.iconBg,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 13, fontWeight: 800, color: on ? "#fff" : t.textMuted,
-                        flexShrink: 0, transition: "all 0.2s",
-                      }}>{PLATFORM_META[p.id]?.icon}</div>
+                        flexShrink: 0, transition: "all 0.2s", overflow: "hidden",
+                      }}>
+                        {PLATFORM_META[p.id]?.logo
+                          ? <img src={PLATFORM_META[p.id].logo} alt={p.label} style={{ width: 20, height: 20, objectFit: "contain", borderRadius: 4 }} />
+                          : <span style={{ fontSize: 13, fontWeight: 800, color: on ? "#fff" : t.textMuted }}>{PLATFORM_META[p.id]?.icon}</span>
+                        }
+                      </div>
                       <span style={{
                         fontSize: 13, fontWeight: on ? 600 : 400,
                         color: on ? (isDark ? "#fff" : "#1e293b") : t.textMuted, transition: "color 0.2s"

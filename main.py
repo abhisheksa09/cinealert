@@ -212,6 +212,7 @@ async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, 
             "primary_release_date.lte": to_date,
             "sort_by": "primary_release_date.desc",
             "vote_count.gte": 10,   # skip obscure/unrated entries
+            "region": "IN",
             "page": page,
         }
         try:
@@ -253,6 +254,7 @@ async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, 
         "primary_release_date.gte": today.isoformat(),
         "primary_release_date.lte": future.isoformat(),
         "sort_by": "popularity.desc",
+        "region": "IN",
         "page": 1,
     }
     endpoint = f"{TMDB_BASE}/discover/{'movie' if media_type in ('movie', 'Movies') else 'tv'}"

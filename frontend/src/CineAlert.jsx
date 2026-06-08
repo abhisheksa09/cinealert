@@ -386,11 +386,12 @@ export default function CineAlert() {
 
         {/* UPCOMING RELEASES TAB */}
         {tab === "releases" && (() => {
-          // Derive unique languages from fetched results
-          const availLangs = [...new Set(releases.map(r => {
+          // Show all user-selected languages + any extra languages found in results
+          const resultLangs = releases.map(r => {
             const code = r.language || r.original_language;
             return code ? (LANG_CODES[code] || code.toUpperCase()) : null;
-          }).filter(Boolean))].sort();
+          }).filter(Boolean);
+          const availLangs = [...new Set([...languages, ...resultLangs])].sort();
 
           // Client-side filter + sort
           const filtered = releases
@@ -589,10 +590,11 @@ export default function CineAlert() {
 
         {/* RELEASED TAB */}
         {tab === "released" && (() => {
-          const availLangs = [...new Set(released.map(r => {
+          const resultLangs = released.map(r => {
             const code = r.language || r.original_language;
             return code ? (LANG_CODES[code] || code.toUpperCase()) : null;
-          }).filter(Boolean))].sort();
+          }).filter(Boolean);
+          const availLangs = [...new Set([...languages, ...resultLangs])].sort();
 
           const filtered = released
             .filter(r => {

@@ -252,6 +252,7 @@ export default function CineAlert() {
             }}>🎬</div>
             <div>
               <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px", color: isDark ? "#fff" : "#1e293b" }}>CineAlert</div>
+              <div style={{ fontSize: 12, color: t.textMuted, marginTop: 1 }}>Discover what's showing &amp; streaming</div>
             </div>
 
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>

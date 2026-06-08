@@ -164,6 +164,12 @@ export default function CineAlert() {
   const [releases, setReleases] = useState([]);
   const [loadingReleases, setLoadingReleases] = useState(false);
 
+  // Upcoming tab filters (client-side, no refetch)
+  const [filterLangs, setFilterLangs] = useState([]);   // [] = all
+  const [filterType, setFilterType] = useState("all");  // all | movie | tv
+  const [filterSort, setFilterSort] = useState("date"); // date | rating
+  const [filterSearch, setFilterSearch] = useState("");
+
   const t = THEMES[theme];
   const isDark = theme === "dark";
 
@@ -359,80 +365,207 @@ export default function CineAlert() {
         )}
 
         {/* UPCOMING RELEASES TAB */}
-        {tab === "releases" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <span style={{ fontSize: 13, color: t.textMuted }}>{releases.length} titles for you</span>
-              {loadingReleases && (
-                <span style={{ fontSize: 12, color: "#7c3aed" }}>Loading…</span>
+        {tab === "releases" && (() => {
+          // Derive unique languages from fetched results
+          const availLangs = [...new Set(releases.map(r => {
+            const code = r.language || r.original_language;
+            return code ? (LANG_CODES[code] || code.toUpperCase()) : null;
+          }).filter(Boolean))].sort();
+
+          // Client-side filter + sort
+          const filtered = releases
+            .filter(r => {
+              if (filterSearch) {
+                const q = filterSearch.toLowerCase();
+                if (!(r.title || "").toLowerCase().includes(q) &&
+                    !(r.overview || "").toLowerCase().includes(q)) return false;
+              }
+              if (filterType !== "all" && r.media_type !== filterType) return false;
+              if (filterLangs.length > 0) {
+                const code = r.language || r.original_language || "";
+                const label = LANG_CODES[code] || code.toUpperCase();
+                if (!filterLangs.includes(label)) return false;
+              }
+              return true;
+            })
+            .slice()
+            .sort((a, b) => {
+              if (filterSort === "rating") return (b.rating || 0) - (a.rating || 0);
+              return (a.release_date || "9999") < (b.release_date || "9999") ? -1 : 1;
+            });
+
+          const hasActiveFilter = filterSearch || filterType !== "all" || filterLangs.length > 0;
+
+          return (
+            <div>
+              {/* ── Filter bar ── */}
+              <div style={{
+                background: t.cardBg, border: `1px solid ${t.cardBorder}`,
+                borderRadius: 14, padding: "12px 14px", marginBottom: 14,
+                display: "flex", flexDirection: "column", gap: 10,
+              }}>
+                {/* Search */}
+                <div style={{ position: "relative" }}>
+                  <span style={{
+                    position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                    fontSize: 14, color: t.textMuted, pointerEvents: "none"
+                  }}>🔍</span>
+                  <input
+                    value={filterSearch}
+                    onChange={e => setFilterSearch(e.target.value)}
+                    placeholder="Search titles…"
+                    style={{
+                      width: "100%", padding: "8px 10px 8px 32px",
+                      background: t.inputBg, border: `1px solid ${t.inputBorder}`,
+                      borderRadius: 8, color: t.text, fontSize: 13, outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  {filterSearch && (
+                    <button onClick={() => setFilterSearch("")} style={{
+                      position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                      background: "none", border: "none", cursor: "pointer",
+                      color: t.textMuted, fontSize: 14, lineHeight: 1,
+                    }}>✕</button>
+                  )}
+                </div>
+
+                {/* Row 2: type + sort */}
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  {[
+                    { val: "all",   label: "All" },
+                    { val: "movie", label: "🎬 Movies" },
+                    { val: "tv",    label: "📺 Series" },
+                  ].map(opt => (
+                    <button key={opt.val} onClick={() => setFilterType(opt.val)} style={{
+                      padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: filterType === opt.val ? 700 : 400,
+                      border: filterType === opt.val ? "1.5px solid #7c3aed" : `1.5px solid ${t.cardBorder}`,
+                      background: filterType === opt.val ? "#7c3aed" : t.inputBg,
+                      color: filterType === opt.val ? "#fff" : t.textMuted,
+                      cursor: "pointer", transition: "all 0.18s",
+                    }}>{opt.label}</button>
+                  ))}
+
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                    {[
+                      { val: "date",   label: "📅 Date" },
+                      { val: "rating", label: "⭐ Rating" },
+                    ].map(opt => (
+                      <button key={opt.val} onClick={() => setFilterSort(opt.val)} style={{
+                        padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: filterSort === opt.val ? 700 : 400,
+                        border: filterSort === opt.val ? `1.5px solid #4f46e5` : `1.5px solid ${t.cardBorder}`,
+                        background: filterSort === opt.val ? "#4f46e5" : t.inputBg,
+                        color: filterSort === opt.val ? "#fff" : t.textMuted,
+                        cursor: "pointer", transition: "all 0.18s",
+                      }}>{opt.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Row 3: language chips (only show languages present in results) */}
+                {availLangs.length > 1 && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {availLangs.map(lang => {
+                      const on = filterLangs.includes(lang);
+                      return (
+                        <button key={lang} onClick={() =>
+                          setFilterLangs(on ? filterLangs.filter(l => l !== lang) : [...filterLangs, lang])
+                        } style={{
+                          padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
+                          border: on ? "1.5px solid #0ea5e9" : `1.5px solid ${t.cardBorder}`,
+                          background: on ? "#0ea5e9" : t.inputBg,
+                          color: on ? "#fff" : t.textMuted,
+                          cursor: "pointer", transition: "all 0.18s",
+                        }}>{lang}</button>
+                      );
+                    })}
+                    {filterLangs.length > 0 && (
+                      <button onClick={() => setFilterLangs([])} style={{
+                        padding: "4px 11px", borderRadius: 999, fontSize: 11,
+                        border: `1.5px solid ${t.cardBorder}`, background: "none",
+                        color: "#f87171", cursor: "pointer",
+                      }}>✕ Clear</button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Results count ── */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <span style={{ fontSize: 13, color: t.textMuted }}>
+                  {loadingReleases ? "Loading…" : `${filtered.length}${hasActiveFilter ? ` of ${releases.length}` : ""} titles`}
+                </span>
+                {hasActiveFilter && (
+                  <button onClick={() => { setFilterSearch(""); setFilterType("all"); setFilterLangs([]); }} style={{
+                    fontSize: 11, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0
+                  }}>✕ Clear all filters</button>
+                )}
+              </div>
+
+              {/* ── Cards ── */}
+              {filtered.length === 0 && !loadingReleases ? (
+                <div style={{
+                  textAlign: "center", padding: "3rem 2rem",
+                  background: t.cardBg, borderRadius: 16,
+                  border: `1px solid ${t.cardBorder}`, color: t.textMuted
+                }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+                  <div style={{ fontSize: 14 }}>No results match your filters.</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {filtered.map((r, i) => {
+                    const code = r.language || r.original_language;
+                    const langLabel = code ? (LANG_CODES[code] || code.toUpperCase()) : null;
+
+                    return (
+                      <div key={i} style={{
+                        display: "flex", gap: 14, padding: "14px",
+                        background: t.cardBg, border: `1px solid ${t.cardBorder}`,
+                        borderRadius: 14, transition: "border-color 0.2s",
+                      }}>
+                        {r.poster ? (
+                          <img src={r.poster} alt={r.title} style={{ width: 48, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                        ) : (
+                          <div style={{ width: 48, height: 64, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎬</div>
+                        )}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <a href={r.tmdb_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
+                          </a>
+                          <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                            <span style={{ textTransform: "capitalize" }}>{r.media_type}</span>
+                            {r.rating ? <><span>·</span><span style={{ color: "#fbbf24" }}>★ {r.rating.toFixed(1)}</span></> : null}
+                            {langLabel && (
+                              <>
+                                <span>·</span>
+                                <span style={{
+                                  fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
+                                  background: isDark ? "#1e293b" : "#f1f5f9",
+                                  color: isDark ? "#94a3b8" : "#64748b",
+                                  border: `1px solid ${t.cardBorder}`,
+                                }}>{langLabel}</span>
+                              </>
+                            )}
+                          </div>
+                          {r.platforms && r.platforms.length > 0 && (
+                            <div style={{ display: "flex", gap: 5, marginTop: 7, flexWrap: "wrap" }}>
+                              {r.platforms.map(p => <PlatformBadge key={p} platformKey={p} />)}
+                            </div>
+                          )}
+                          {r.overview && <div style={{ fontSize: 12, color: t.textMuted, marginTop: 6, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.overview}</div>}
+                        </div>
+                        <div style={{ flexShrink: 0, textAlign: "right" }}>
+                          <div style={{ fontSize: 11, color: t.textSecondary, background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{r.release_date || "TBA"}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
-            {releases.length === 0 && !loadingReleases ? (
-              <div style={{
-                textAlign: "center", padding: "3rem 2rem",
-                background: t.cardBg, borderRadius: 16,
-                border: `1px solid ${t.cardBorder}`, color: t.textMuted
-              }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>🎬</div>
-                <div style={{ fontSize: 14 }}>No matches. Adjust your preferences.</div>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {releases.map((r, i) => {
-                  const langLabel = r.language
-                    ? (LANG_CODES[r.language] || r.language.toUpperCase())
-                    : (r.original_language ? (LANG_CODES[r.original_language] || r.original_language.toUpperCase()) : null);
-
-                  return (
-                    <div key={i} style={{
-                      display: "flex", gap: 14, padding: "14px",
-                      background: t.cardBg, border: `1px solid ${t.cardBorder}`,
-                      borderRadius: 14, transition: "border-color 0.2s",
-                    }}>
-                      {r.poster ? (
-                        <img src={r.poster} alt={r.title} style={{ width: 48, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
-                      ) : (
-                        <div style={{ width: 48, height: 64, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎬</div>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <a href={r.tmdb_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
-                        </a>
-                        <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <span style={{ textTransform: "capitalize" }}>{r.media_type}</span>
-                          {r.rating ? <><span>·</span><span style={{ color: "#fbbf24" }}>★ {r.rating.toFixed(1)}</span></> : null}
-                          {langLabel && (
-                            <>
-                              <span>·</span>
-                              <span style={{
-                                fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
-                                background: isDark ? "#1e293b" : "#f1f5f9",
-                                color: isDark ? "#94a3b8" : "#64748b",
-                                border: `1px solid ${t.cardBorder}`,
-                              }}>{langLabel}</span>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Platform badges */}
-                        {r.platforms && r.platforms.length > 0 && (
-                          <div style={{ display: "flex", gap: 5, marginTop: 7, flexWrap: "wrap" }}>
-                            {r.platforms.map(p => <PlatformBadge key={p} platformKey={p} />)}
-                          </div>
-                        )}
-
-                        {r.overview && <div style={{ fontSize: 12, color: t.textMuted, marginTop: 6, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.overview}</div>}
-                      </div>
-                      <div style={{ flexShrink: 0, textAlign: "right" }}>
-                        <div style={{ fontSize: 11, color: t.textSecondary, background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{r.release_date || "TBA"}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* ALERTS TAB */}
         {tab === "alerts" && (

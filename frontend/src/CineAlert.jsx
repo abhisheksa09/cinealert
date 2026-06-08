@@ -8,10 +8,12 @@ const PLATFORMS = [
   { id: "disney", label: "Disney+", color: "#113ccf" },
   { id: "apple", label: "Apple TV+", color: "#333" },
   { id: "hbo", label: "HBO Max", color: "#6d00cc" },
-  { id: "hotstar", label: "Hotstar", color: "#1f80e0" },
+  { id: "hotstar", label: "Jio Hotstar", color: "#1f80e0" },
+  { id: "zee5", label: "Zee5", color: "#7b2ff7" },
+  { id: "sonyliv", label: "SonyLIV", color: "#e4002b" },
 ];
 
-const LANGUAGES = ["English", "Hindi", "Dutch", "Tamil", "Telugu", "Korean", "Spanish", "Japanese", "French", "German"];
+const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Kannada", "Korean", "Japanese"];
 
 const CONTENT_TYPES = ["Movies", "Series", "Documentaries", "Anime"];
 

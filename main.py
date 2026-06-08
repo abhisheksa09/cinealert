@@ -63,13 +63,13 @@ MY_NOTIFY_SOON   = os.getenv("MY_NOTIFY_SOON", "true").lower() == "true"
 MY_NOTIFY_TRAILER = os.getenv("MY_NOTIFY_TRAILER", "false").lower() == "true"
 
 LANG_MAP = {
-    "English": "en", "Hindi": "hi", "Dutch": "nl", "Tamil": "ta",
-    "Telugu": "te", "Korean": "ko", "Spanish": "es", "Japanese": "ja",
-    "French": "fr", "German": "de",
+    "English": "en", "Hindi": "hi", "Tamil": "ta", "Telugu": "te",
+    "Kannada": "kn", "Korean": "ko", "Japanese": "ja",
 }
 
 PLATFORM_IDS = {
-    "netflix": 8, "prime": 9, "disney": 337, "apple": 350, "hbo": 384, "hotstar": 122
+    "netflix": 8, "prime": 9, "disney": 337, "apple": 350,
+    "hbo": 384, "hotstar": 122, "zee5": 232, "sonyliv": 237,
 }
 
 

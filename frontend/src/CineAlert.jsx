@@ -310,16 +310,20 @@ export default function CineAlert() {
         {/* UPCOMING RELEASES TAB */}
         {tab === "releases" && (() => {
           // Client-side filter + sort
+          const matchesFilter = (r, titleKey = "title", overviewKey = "overview", typeKey = "media_type") => {
+            if (filterSearch) {
+              const q = filterSearch.toLowerCase();
+              if (!(r[titleKey] || "").toLowerCase().includes(q) &&
+                  !(r[overviewKey] || "").toLowerCase().includes(q)) return false;
+            }
+            if (filterType !== "all" && r[typeKey] !== filterType) return false;
+            return true;
+          };
+
+          const filteredStreaming = streamingItems.filter(r => matchesFilter(r));
+
           const filtered = releases
-            .filter(r => {
-              if (filterSearch) {
-                const q = filterSearch.toLowerCase();
-                if (!(r.title || "").toLowerCase().includes(q) &&
-                    !(r.overview || "").toLowerCase().includes(q)) return false;
-              }
-              if (filterType !== "all" && r.media_type !== filterType) return false;
-              return true;
-            })
+            .filter(r => matchesFilter(r))
             .slice()
             .sort((a, b) => {
               if (filterSort === "rating") return (b.rating || 0) - (a.rating || 0);
@@ -439,7 +443,7 @@ export default function CineAlert() {
               {/* ── Results count ── */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <span style={{ fontSize: 13, color: t.textMuted }}>
-                  {loadingReleases ? "Loading…" : `${filtered.length}${hasActiveFilter ? ` of ${releases.length}` : ""} titles`}
+                  {loadingReleases ? "Loading…" : `${filteredStreaming.length + filtered.length}${hasActiveFilter ? ` of ${streamingItems.length + releases.length}` : ""} titles`}
                 </span>
                 {hasActiveFilter && (
                   <button onClick={() => { setFilterSearch(""); setFilterType("all"); }} style={{
@@ -449,7 +453,7 @@ export default function CineAlert() {
               </div>
 
               {/* ── Streaming Soon section ── */}
-              {(loadingStreaming || streamingItems.length > 0) && (
+              {(loadingStreaming || filteredStreaming.length > 0) && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: t.sectionLabel, letterSpacing: "0.06em", textTransform: "uppercase" }}>Streaming Soon</div>
@@ -465,7 +469,7 @@ export default function CineAlert() {
                     </div>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {streamingItems.map((item, i) => {
+                      {filteredStreaming.map((item, i) => {
                         const meta = PLATFORM_META[item.platform] || { label: item.platform_name || item.platform, color: "#7c3aed", icon: "▶" };
                         const dateStr = item.available_date
                           ? new Date(item.available_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })

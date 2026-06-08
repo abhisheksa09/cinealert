@@ -162,6 +162,80 @@ async def get_releases(languages: str = "", platforms: str = "", days_ahead: int
 
     return {"releases": results}
 
+@app.get("/released")
+async def get_released(languages: str = "", media_type: str = "movie", from_year: int = 2020):
+    """Already-released titles from from_year up to today, per selected languages."""
+    lang_list = languages.split(",") if languages else MY_LANGUAGES
+    lang_codes = [LANG_MAP.get(l.strip(), "en") for l in lang_list if l.strip()]
+    if not lang_codes:
+        lang_codes = ["en"]
+
+    async with httpx.AsyncClient() as client:
+        tasks = [fetch_released(client, media_type, lc, from_year) for lc in lang_codes]
+        lang_results = await asyncio.gather(*tasks)
+
+    # Interleave round-robin so no language dominates
+    max_len = max((len(r) for r in lang_results), default=0)
+    merged, seen_ids = [], set()
+    for slot in range(max_len):
+        for lang_res in lang_results:
+            if slot < len(lang_res):
+                item = lang_res[slot]
+                if item["tmdb_id"] not in seen_ids:
+                    seen_ids.add(item["tmdb_id"])
+                    merged.append(item)
+
+    # Fetch provider info concurrently
+    media_path = "movie" if media_type in ("movie", "Movies") else "tv"
+    async with httpx.AsyncClient() as client:
+        provider_tasks = [get_watch_providers(client, item["tmdb_id"], media_type) for item in merged]
+        all_providers = await asyncio.gather(*provider_tasks)
+
+    for item, provider_ids in zip(merged, all_providers):
+        item["platforms"] = [PROVIDER_NAMES[pid] for pid in provider_ids if pid in PROVIDER_NAMES]
+        item["tmdb_url"] = f"https://www.themoviedb.org/{media_path}/{item['tmdb_id']}"
+
+    return {"releases": merged}
+
+
+async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, from_year: int = 2020, pages: int = 3):
+    """Fetch already-released titles sorted by release date descending, 2 pages per language."""
+    from_date = f"{from_year}-01-01"
+    to_date = date.today().isoformat()
+    endpoint = f"{TMDB_BASE}/discover/{'movie' if media_type in ('movie', 'Movies') else 'tv'}"
+    results = []
+    for page in range(1, pages + 1):
+        params = {
+            "api_key": TMDB_KEY,
+            "with_original_language": lang,
+            "primary_release_date.gte": from_date,
+            "primary_release_date.lte": to_date,
+            "sort_by": "primary_release_date.desc",
+            "vote_count.gte": 10,   # skip obscure/unrated entries
+            "page": page,
+        }
+        try:
+            r = await client.get(endpoint, params=params, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            for item in data.get("results", []):
+                results.append({
+                    "tmdb_id": item["id"],
+                    "title": item.get("title") or item.get("name"),
+                    "media_type": media_type,
+                    "language": lang,
+                    "release_date": item.get("release_date") or item.get("first_air_date"),
+                    "poster": f"https://image.tmdb.org/t/p/w185{item['poster_path']}" if item.get("poster_path") else None,
+                    "overview": item.get("overview", "")[:200],
+                    "rating": item.get("vote_average"),
+                })
+            if page >= data.get("total_pages", 1):
+                break
+        except Exception:
+            break
+    return results
+
+
 @app.post("/scan")
 async def trigger_scan():
     """Manually trigger a release scan."""

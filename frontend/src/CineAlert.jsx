@@ -419,6 +419,14 @@ export default function CineAlert() {
                       </button>
                     );
                   })}
+                  {platforms.length > 0 && (
+                    <button onClick={() => setPlatforms([])} title="Clear platforms" style={{
+                      width: 20, height: 20, borderRadius: "50%", border: "none", cursor: "pointer",
+                      background: "#444", color: "#ccc", fontSize: 12, lineHeight: 1,
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      marginLeft: 2, transition: "background 0.15s",
+                    }}>×</button>
+                  )}
                 </div>
 
                 {/* Row 4: languages */}
@@ -436,6 +444,14 @@ export default function CineAlert() {
                       }}>{lang}</button>
                     );
                   })}
+                  {languages.length > 0 && (
+                    <button onClick={() => setLanguages([])} title="Clear languages" style={{
+                      width: 20, height: 20, borderRadius: "50%", border: "none", cursor: "pointer",
+                      background: "#444", color: "#ccc", fontSize: 12, lineHeight: 1,
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      marginLeft: 2, transition: "background 0.15s",
+                    }}>×</button>
+                  )}
                 </div>
               </div>
 
@@ -590,6 +606,14 @@ export default function CineAlert() {
                       </button>
                     );
                   })}
+                  {platforms.length > 0 && (
+                    <button onClick={() => setPlatforms([])} title="Clear platforms" style={{
+                      width: 20, height: 20, borderRadius: "50%", border: "none", cursor: "pointer",
+                      background: "#444", color: "#ccc", fontSize: 12, lineHeight: 1,
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      marginLeft: 2, transition: "background 0.15s",
+                    }}>×</button>
+                  )}
                 </div>
               </div>
 

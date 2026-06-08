@@ -331,7 +331,7 @@ export default function CineAlert() {
                       border: "none",
                       background: on ? (isDark ? p.bg : p.color + "18") : t.cardBg,
                       cursor: "pointer", transition: "all 0.2s",
-                      boxShadow: on ? `0 0 0 1.5px ${p.color}60, 0 2px 8px ${p.color}20` : `0 0 0 1px ${t.cardBorder}`,
+                      boxShadow: "none",
                     }}>
                       <div style={{
                         width: 28, height: 28, borderRadius: 8,

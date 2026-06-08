@@ -133,7 +133,7 @@ async def get_releases(languages: str = "", platforms: str = "", days_ahead: int
         lang_codes = ["en"]
 
     # Fetch all languages concurrently — 5 results per language so every language is represented
-    per_lang = max(3, 30 // len(lang_codes))
+    per_lang = 10  # fetch up to 10 per language; frontend filters handle the rest
     async with httpx.AsyncClient() as client:
         tasks = [fetch_upcoming(client, media_type, lc, days_ahead, limit=per_lang) for lc in lang_codes]
         lang_results = await asyncio.gather(*tasks)
@@ -148,7 +148,7 @@ async def get_releases(languages: str = "", platforms: str = "", days_ahead: int
                     seen_ids.add(item["tmdb_id"])
                     merged.append(item)
 
-    results = merged[:30]
+    results = merged  # no cap — frontend has filters
 
     # Fetch provider info for all items concurrently
     media_path = "movie" if media_type in ("movie", "Movies") else "tv"

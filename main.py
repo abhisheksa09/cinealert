@@ -128,19 +128,38 @@ PROVIDER_NAMES = {
 async def get_releases(languages: str = "", platforms: str = "", days_ahead: int = 30, media_type: str = "movie"):
     """Preview upcoming releases via TMDB (used by frontend)."""
     lang_list = languages.split(",") if languages else MY_LANGUAGES
-    lang_codes = [LANG_MAP.get(l.strip(), "en") for l in lang_list]
-    results = []
+    lang_codes = [LANG_MAP.get(l.strip(), "en") for l in lang_list if l.strip()]
+    if not lang_codes:
+        lang_codes = ["en"]
+
+    # Fetch all languages concurrently — 5 results per language so every language is represented
+    per_lang = max(3, 30 // len(lang_codes))
     async with httpx.AsyncClient() as client:
-        for lang_code in lang_codes[:3]:
-            data = await fetch_upcoming(client, media_type, lang_code, days_ahead)
-            results.extend(data)
-    results = results[:15]
-    # Fetch provider info for each result
+        tasks = [fetch_upcoming(client, media_type, lc, days_ahead, limit=per_lang) for lc in lang_codes]
+        lang_results = await asyncio.gather(*tasks)
+
+    # Interleave results (round-robin) so no single language dominates
+    merged, seen_ids = [], set()
+    for slot in range(per_lang):
+        for lang_res in lang_results:
+            if slot < len(lang_res):
+                item = lang_res[slot]
+                if item["tmdb_id"] not in seen_ids:
+                    seen_ids.add(item["tmdb_id"])
+                    merged.append(item)
+
+    results = merged[:30]
+
+    # Fetch provider info for all items concurrently
+    media_path = "movie" if media_type in ("movie", "Movies") else "tv"
     async with httpx.AsyncClient() as client:
-        for item in results:
-            provider_ids = await get_watch_providers(client, item["tmdb_id"], media_type)
-            item["platforms"] = [PROVIDER_NAMES[pid] for pid in provider_ids if pid in PROVIDER_NAMES]
-            item["tmdb_url"] = f"https://www.themoviedb.org/{'movie' if media_type in ('movie', 'Movies') else 'tv'}/{item['tmdb_id']}"
+        provider_tasks = [get_watch_providers(client, item["tmdb_id"], media_type) for item in results]
+        all_providers = await asyncio.gather(*provider_tasks)
+
+    for item, provider_ids in zip(results, all_providers):
+        item["platforms"] = [PROVIDER_NAMES[pid] for pid in provider_ids if pid in PROVIDER_NAMES]
+        item["tmdb_url"] = f"https://www.themoviedb.org/{media_path}/{item['tmdb_id']}"
+
     return {"releases": results}
 
 @app.post("/scan")
@@ -151,7 +170,7 @@ async def trigger_scan():
 
 
 # ── TMDB helpers ──────────────────────────────────────────────────────────────
-async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, days_ahead: int):
+async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, days_ahead: int, limit: int = 5):
     today = date.today()
     future = today + timedelta(days=days_ahead)
     params = {
@@ -167,7 +186,7 @@ async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, 
     r.raise_for_status()
     data = r.json()
     results = []
-    for item in data.get("results", [])[:10]:
+    for item in data.get("results", [])[:limit]:
         results.append({
             "tmdb_id": item["id"],
             "title": item.get("title") or item.get("name"),

@@ -307,6 +307,7 @@ async def get_streaming_upcoming(platforms: str = "", days_ahead: int = 45):
 
 async def _fetch_watchmode(client: httpx.AsyncClient, source_ids: list, today: date, future: date) -> list:
     id_to_key = {v: k for k, v in WATCHMODE_SOURCE_MAP.items()}
+    source_id_set = set(source_ids)
     try:
         r = await client.get(
             "https://api.watchmode.com/v1/releases/",
@@ -321,14 +322,22 @@ async def _fetch_watchmode(client: httpx.AsyncClient, source_ids: list, today: d
         r.raise_for_status()
         items = []
         for rel in r.json().get("releases", []):
-            raw_date = str(rel.get("release_date", ""))
-            avail_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}" if len(raw_date) == 8 else None
+            sid = rel.get("source_id")
+            # Watchmode ignores source_ids filter — enforce client-side
+            if sid not in source_id_set:
+                continue
+            # release_date is a Unix timestamp
+            ts = rel.get("release_date")
+            try:
+                avail_date = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d") if ts else None
+            except Exception:
+                avail_date = None
             items.append({
                 "title":          rel.get("title"),
                 "overview":       "",
                 "poster":         rel.get("poster_url"),
                 "media_type":     "movie" if "movie" in (rel.get("type") or "") else "tv",
-                "platform":       id_to_key.get(rel.get("source_id"), str(rel.get("source_id"))),
+                "platform":       id_to_key.get(sid, str(sid)),
                 "platform_name":  rel.get("source_name"),
                 "available_date": avail_date,
                 "link":           None,

@@ -318,10 +318,10 @@ export default function CineAlert() {
                     <button key={p.id} onClick={() => toggleSet(platforms, setPlatforms, p.id)} style={{
                       display: "flex", alignItems: "center", gap: 10,
                       padding: "10px 14px", borderRadius: 12,
-                      border: on ? `1.5px solid ${p.color}40` : `1.5px solid ${t.cardBorder}`,
-                      background: on ? (isDark ? p.bg : p.color + "15") : t.cardBg,
+                      border: "none",
+                      background: on ? (isDark ? p.bg : p.color + "18") : t.cardBg,
                       cursor: "pointer", transition: "all 0.2s",
-                      boxShadow: on ? `0 0 16px ${p.color}20` : "none",
+                      boxShadow: on ? `0 0 0 1.5px ${p.color}60, 0 2px 8px ${p.color}20` : `0 0 0 1px ${t.cardBorder}`,
                     }}>
                       <div style={{
                         width: 28, height: 28, borderRadius: 8,
@@ -374,12 +374,13 @@ export default function CineAlert() {
                     <button key={ct} onClick={() => toggleSet(types, setTypes, ct)} style={{
                       display: "flex", alignItems: "center", gap: 6,
                       padding: "8px 18px", borderRadius: 10,
-                      border: on ? "1.5px solid #3b82f6" : `1.5px solid ${t.cardBorder}`,
-                      background: on ? "#2563eb" : t.cardBg,
+                      border: "none",
+                      background: on ? (isDark ? "#1e3a5f" : "#dbeafe") : t.cardBg,
                       cursor: "pointer", fontSize: 13,
                       fontWeight: on ? 600 : 400,
-                      color: on ? "#fff" : t.textMuted,
+                      color: on ? (isDark ? "#93c5fd" : "#1d4ed8") : t.textMuted,
                       transition: "all 0.2s",
+                      boxShadow: on ? `0 0 0 1.5px #3b82f660, 0 2px 6px #3b82f620` : `0 0 0 1px ${t.cardBorder}`,
                     }}><span>{icons[i]}</span>{ct}</button>
                   );
                 })}
@@ -712,9 +713,10 @@ export default function CineAlert() {
                           return (
                             <button key={lang} onClick={() => setRFilterLangs(on ? rFilterLangs.filter(l => l !== lang) : [...rFilterLangs, lang])} style={{
                               padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
-                              border: on ? "1.5px solid #0ea5e9" : `1.5px solid ${t.cardBorder}`,
-                              background: on ? "#0ea5e9" : t.inputBg,
-                              color: on ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
+                              border: "none",
+                              background: on ? (isDark ? "#0c3547" : "#e0f2fe") : t.inputBg,
+                              color: on ? (isDark ? "#38bdf8" : "#0369a1") : t.textMuted, cursor: "pointer", transition: "all 0.18s",
+                              boxShadow: on ? "0 0 0 1.5px #0ea5e980" : `0 0 0 1px ${t.cardBorder}`,
                             }}>{lang}</button>
                           );
                         })}
@@ -730,10 +732,11 @@ export default function CineAlert() {
                           return (
                             <button key={p.id} onClick={() => setRFilterPlatforms(on ? rFilterPlatforms.filter(x => x !== p.id) : [...rFilterPlatforms, p.id])} style={{
                               padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
-                              border: on ? `1.5px solid ${p.color}` : `1.5px solid ${t.cardBorder}`,
-                              background: on ? p.color : t.inputBg,
-                              color: on ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
+                              border: "none",
+                              background: on ? (isDark ? p.bg : p.color + "18") : t.inputBg,
+                              color: on ? (isDark ? "#fff" : p.color) : t.textMuted, cursor: "pointer", transition: "all 0.18s",
                               display: "flex", alignItems: "center", gap: 4,
+                              boxShadow: on ? `0 0 0 1.5px ${p.color}80` : `0 0 0 1px ${t.cardBorder}`,
                             }}>
                               {meta?.logo
                                 ? <img src={meta.logo} alt="" style={{ width: 12, height: 12, objectFit: "contain", borderRadius: 2 }} />

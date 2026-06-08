@@ -58,7 +58,7 @@ MY_NOTIFY_TRAILER = os.getenv("MY_NOTIFY_TRAILER", "false").lower() == "true"
 
 LANG_MAP = {
     "English": "en", "Hindi": "hi", "Tamil": "ta", "Telugu": "te",
-    "Kannada": "kn", "Korean": "ko", "Japanese": "ja",
+    "Kannada": "kn", "Korean": "ko", "Japanese": "ja", "Malayalam": "ml",
 }
 
 PLATFORM_IDS = {

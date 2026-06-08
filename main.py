@@ -126,6 +126,20 @@ app = FastAPI(title="CineAlert API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
+# ── Simple TTL cache ──────────────────────────────────────────────────────────
+_cache: dict = {}  # key -> (value, expires_at)
+CACHE_TTL = 2 * 60 * 60  # 2 hours in seconds
+
+def cache_get(key: str):
+    entry = _cache.get(key)
+    if entry and datetime.utcnow().timestamp() < entry[1]:
+        return entry[0]
+    return None
+
+def cache_set(key: str, value):
+    _cache[key] = (value, datetime.utcnow().timestamp() + CACHE_TTL)
+
+
 # ── API Routes ────────────────────────────────────────────────────────────────
 PROVIDER_NAMES = {
     # Global
@@ -147,6 +161,11 @@ PROVIDER_NAMES = {
 @app.get("/releases")
 async def get_releases(languages: str = "", platforms: str = "", days_ahead: int = 30, media_type: str = "movie"):
     """Preview upcoming releases via TMDB (used by frontend)."""
+    cache_key = f"releases:{languages}:{media_type}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     lang_list = languages.split(",") if languages else MY_LANGUAGES
     lang_codes = [LANG_MAP.get(l.strip(), "en") for l in lang_list if l.strip()]
     if not lang_codes:
@@ -180,11 +199,18 @@ async def get_releases(languages: str = "", platforms: str = "", days_ahead: int
         item["platforms"] = [PROVIDER_NAMES[pid] for pid in provider_ids if pid in PROVIDER_NAMES]
         item["tmdb_url"] = f"https://www.themoviedb.org/{media_path}/{item['tmdb_id']}"
 
-    return {"releases": results}
+    response = {"releases": results}
+    cache_set(cache_key, response)
+    return response
 
 @app.get("/released")
 async def get_released(languages: str = "", media_type: str = "movie", from_year: int = 2020):
     """Already-released titles from from_year up to today, per selected languages."""
+    cache_key = f"released:{languages}:{media_type}:{from_year}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     lang_list = languages.split(",") if languages else MY_LANGUAGES
     lang_codes = [LANG_MAP.get(l.strip(), "en") for l in lang_list if l.strip()]
     if not lang_codes:
@@ -221,7 +247,9 @@ async def get_released(languages: str = "", media_type: str = "movie", from_year
         item["platforms"] = [PROVIDER_NAMES[pid] for pid in provider_ids if pid in PROVIDER_NAMES]
         item["tmdb_url"] = f"https://www.themoviedb.org/{media_path}/{item['tmdb_id']}"
 
-    return {"releases": merged}
+    response = {"releases": merged}
+    cache_set(cache_key, response)
+    return response
 
 
 async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, from_year: int = 2020, pages: int = 3):
@@ -268,6 +296,11 @@ async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, 
 @app.get("/streaming-upcoming")
 async def get_streaming_upcoming(platforms: str = "", days_ahead: int = 45):
     """Return shows arriving soon — Watchmode for global platforms, MOTN for Indian platforms."""
+    cache_key = f"streaming-upcoming:{platforms}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     platform_list = [p.strip() for p in platforms.split(",")] if platforms else list(WATCHMODE_SOURCE_MAP.keys()) + list(MOTN_CATALOG_MAP.keys())
 
     today  = date.today()
@@ -303,7 +336,9 @@ async def get_streaming_upcoming(platforms: str = "", days_ahead: int = 45):
             seen.add(key)
             unique.append(item)
 
-    return {"items": unique}
+    response = {"items": unique}
+    cache_set(cache_key, response)
+    return response
 
 
 async def _fetch_watchmode(client: httpx.AsyncClient, source_ids: list, today: date, future: date) -> list:

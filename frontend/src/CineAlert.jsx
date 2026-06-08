@@ -189,6 +189,7 @@ export default function CineAlert() {
   const [rFilterType, setRFilterType] = useState("all");
   const [rFilterSort, setRFilterSort] = useState("date");
   const [rFilterSearch, setRFilterSearch] = useState("");
+  const [rFilterOpen, setRFilterOpen] = useState(false);
 
   const t = THEMES[theme];
   const isDark = theme === "dark";
@@ -662,7 +663,7 @@ export default function CineAlert() {
                   )}
                 </div>
 
-                {/* Type + Sort */}
+                {/* Type + Sort + Filters button row */}
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                   {[{ val: "all", label: "All" }, { val: "movie", label: "🎬 Movies" }, { val: "tv", label: "📺 Series" }].map(opt => (
                     <button key={opt.val} onClick={() => setRFilterType(opt.val)} style={{
@@ -672,7 +673,7 @@ export default function CineAlert() {
                       color: rFilterType === opt.val ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
                     }}>{opt.label}</button>
                   ))}
-                  <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
                     {[{ val: "date", label: "📅 Date" }, { val: "rating", label: "⭐ Rating" }].map(opt => (
                       <button key={opt.val} onClick={() => setRFilterSort(opt.val)} style={{
                         padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: rFilterSort === opt.val ? 700 : 400,
@@ -681,50 +682,74 @@ export default function CineAlert() {
                         color: rFilterSort === opt.val ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
                       }}>{opt.label}</button>
                     ))}
+                    {/* Filters dropdown button */}
+                    <button onClick={() => setRFilterOpen(o => !o)} style={{
+                      padding: "5px 12px", borderRadius: 999, fontSize: 12, display: "flex", alignItems: "center", gap: 5,
+                      border: (rFilterLangs.length > 0 || rFilterPlatforms.length > 0) ? "1.5px solid #0ea5e9" : `1.5px solid ${t.cardBorder}`,
+                      background: (rFilterLangs.length > 0 || rFilterPlatforms.length > 0) ? "#0ea5e920" : t.inputBg,
+                      color: (rFilterLangs.length > 0 || rFilterPlatforms.length > 0) ? "#0ea5e9" : t.textMuted,
+                      cursor: "pointer", transition: "all 0.18s", fontWeight: 500,
+                    }}>
+                      ⚙ Filters
+                      {(rFilterLangs.length + rFilterPlatforms.length) > 0 && (
+                        <span style={{ background: "#0ea5e9", color: "#fff", borderRadius: 999, fontSize: 10, fontWeight: 700, padding: "1px 6px" }}>
+                          {rFilterLangs.length + rFilterPlatforms.length}
+                        </span>
+                      )}
+                    </button>
                   </div>
                 </div>
 
-                {/* Language chips */}
-                {availLangs.length > 1 && (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {availLangs.map(lang => {
-                      const on = rFilterLangs.includes(lang);
-                      return (
-                        <button key={lang} onClick={() => setRFilterLangs(on ? rFilterLangs.filter(l => l !== lang) : [...rFilterLangs, lang])} style={{
-                          padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
-                          border: on ? "1.5px solid #0ea5e9" : `1.5px solid ${t.cardBorder}`,
-                          background: on ? "#0ea5e9" : t.inputBg,
-                          color: on ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
-                        }}>{lang}</button>
-                      );
-                    })}
-                    {rFilterLangs.length > 0 && (
-                      <button onClick={() => setRFilterLangs([])} style={{ padding: "4px 11px", borderRadius: 999, fontSize: 11, border: `1.5px solid ${t.cardBorder}`, background: "none", color: "#f87171", cursor: "pointer" }}>✕ Clear</button>
+                {/* Collapsible filter panel */}
+                {rFilterOpen && (
+                  <div style={{ borderTop: `1px solid ${t.cardBorder}`, paddingTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                    {/* Language */}
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 6 }}>Language</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {availLangs.map(lang => {
+                          const on = rFilterLangs.includes(lang);
+                          return (
+                            <button key={lang} onClick={() => setRFilterLangs(on ? rFilterLangs.filter(l => l !== lang) : [...rFilterLangs, lang])} style={{
+                              padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
+                              border: on ? "1.5px solid #0ea5e9" : `1.5px solid ${t.cardBorder}`,
+                              background: on ? "#0ea5e9" : t.inputBg,
+                              color: on ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
+                            }}>{lang}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {/* Platform */}
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 6 }}>Platform</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {PLATFORMS.map(p => {
+                          const on = rFilterPlatforms.includes(p.id);
+                          const meta = PLATFORM_META[p.id];
+                          return (
+                            <button key={p.id} onClick={() => setRFilterPlatforms(on ? rFilterPlatforms.filter(x => x !== p.id) : [...rFilterPlatforms, p.id])} style={{
+                              padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
+                              border: on ? `1.5px solid ${p.color}` : `1.5px solid ${t.cardBorder}`,
+                              background: on ? p.color : t.inputBg,
+                              color: on ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
+                              display: "flex", alignItems: "center", gap: 4,
+                            }}>
+                              {meta?.logo
+                                ? <img src={meta.logo} alt="" style={{ width: 12, height: 12, objectFit: "contain", borderRadius: 2 }} />
+                                : <span style={{ fontSize: 10, fontWeight: 800 }}>{meta?.icon}</span>
+                              }
+                              {p.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {(rFilterLangs.length > 0 || rFilterPlatforms.length > 0) && (
+                      <button onClick={() => { setRFilterLangs([]); setRFilterPlatforms([]); }} style={{ alignSelf: "flex-start", padding: "4px 11px", borderRadius: 999, fontSize: 11, border: `1.5px solid ${t.cardBorder}`, background: "none", color: "#f87171", cursor: "pointer" }}>✕ Clear all filters</button>
                     )}
                   </div>
                 )}
-
-                {/* Platform chips */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {PLATFORMS.map(p => {
-                    const on = rFilterPlatforms.includes(p.id);
-                    const meta = PLATFORM_META[p.id];
-                    return (
-                      <button key={p.id} onClick={() => setRFilterPlatforms(on ? rFilterPlatforms.filter(x => x !== p.id) : [...rFilterPlatforms, p.id])} style={{
-                        padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
-                        border: on ? `1.5px solid ${p.color}` : `1.5px solid ${t.cardBorder}`,
-                        background: on ? p.color : t.inputBg,
-                        color: on ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
-                        display: "flex", alignItems: "center", gap: 4,
-                      }}>
-                        <span style={{ fontSize: 10, fontWeight: 800 }}>{meta?.icon}</span>{p.label}
-                      </button>
-                    );
-                  })}
-                  {rFilterPlatforms.length > 0 && (
-                    <button onClick={() => setRFilterPlatforms([])} style={{ padding: "4px 11px", borderRadius: 999, fontSize: 11, border: `1.5px solid ${t.cardBorder}`, background: "none", color: "#f87171", cursor: "pointer" }}>✕ Clear</button>
-                  )}
-                </div>
               </div>
 
               {/* Count row */}

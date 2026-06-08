@@ -210,18 +210,28 @@ export default function CineAlert() {
   useEffect(() => {
     if (tab !== "releases") return;
     setLoadingReleases(true);
-    const mediaType = types.includes("Movies") ? "movie" : "tv";
-    fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=${mediaType}`)
-      .then(data => setReleases(data?.releases || []))
+    const wantMovie = types.includes("Movies");
+    const wantTV = types.includes("Series") || types.includes("Anime") || types.includes("Documentaries");
+    const fetches = [];
+    if (wantMovie) fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=movie`).then(d => d?.releases || []));
+    if (wantTV)    fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=tv`).then(d => d?.releases || []));
+    if (!fetches.length) { setReleases([]); setLoadingReleases(false); return; }
+    Promise.all(fetches)
+      .then(results => setReleases(results.flat()))
       .finally(() => setLoadingReleases(false));
   }, [tab, languages, platforms, types]);
 
   useEffect(() => {
     if (tab !== "released") return;
     setLoadingReleased(true);
-    const mediaType = types.includes("Movies") ? "movie" : "tv";
-    fetchWithRetry(`${API_BASE}/released?languages=${languages.join(",")}&media_type=${mediaType}&from_year=2020`)
-      .then(data => setReleased(data?.releases || []))
+    const wantMovie = types.includes("Movies");
+    const wantTV = types.includes("Series") || types.includes("Anime") || types.includes("Documentaries");
+    const fetches = [];
+    if (wantMovie) fetches.push(fetchWithRetry(`${API_BASE}/released?languages=${languages.join(",")}&media_type=movie&from_year=2020`).then(d => d?.releases || []));
+    if (wantTV)    fetches.push(fetchWithRetry(`${API_BASE}/released?languages=${languages.join(",")}&media_type=tv&from_year=2020`).then(d => d?.releases || []));
+    if (!fetches.length) { setReleased([]); setLoadingReleased(false); return; }
+    Promise.all(fetches)
+      .then(results => setReleased(results.flat()))
       .finally(() => setLoadingReleased(false));
   }, [tab, languages, types]);
 

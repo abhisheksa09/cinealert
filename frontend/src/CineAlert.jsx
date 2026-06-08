@@ -36,8 +36,8 @@ function Toggle({ on, onChange }) {
 
 export default function CineAlert() {
   const [tab, setTab] = useState("prefs");
-  const [platforms, setPlatforms] = useState(["netflix", "prime", "hbo"]);
-  const [languages, setLanguages] = useState(["English", "Hindi"]);
+  const [platforms, setPlatforms] = useState(["netflix", "prime", "hbo", "hotstar", "zee5", "sonyliv"]);
+  const [languages, setLanguages] = useState(["English", "Hindi", "Kannada"]);
   const [types, setTypes] = useState(["Movies", "Series"]);
   const [telegramOn, setTelegramOn] = useState(true);
   const [emailOn, setEmailOn] = useState(true);

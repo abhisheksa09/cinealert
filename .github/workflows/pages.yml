@@ -49,3 +49,9 @@ jobs:
     steps:
       - uses: actions/deploy-pages@v4
         id: deployment
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        run: curl -s "${{ secrets.RENDER_DEPLOY_HOOK }}"

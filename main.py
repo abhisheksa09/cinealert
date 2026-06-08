@@ -186,8 +186,19 @@ async def get_released(languages: str = "", media_type: str = "movie", from_year
                     merged.append(item)
 
     media_path = "movie" if media_type in ("movie", "Movies") else "tv"
-    for item in merged:
-        item["platforms"] = []
+    sem = asyncio.Semaphore(10)
+
+    async def _get_providers_safe(client, tmdb_id, media_type):
+        async with sem:
+            return await get_watch_providers(client, tmdb_id, media_type)
+
+    async with httpx.AsyncClient() as client:
+        all_providers = await asyncio.gather(
+            *[_get_providers_safe(client, item["tmdb_id"], media_type) for item in merged]
+        )
+
+    for item, provider_ids in zip(merged, all_providers):
+        item["platforms"] = [PROVIDER_NAMES[pid] for pid in provider_ids if pid in PROVIDER_NAMES]
         item["tmdb_url"] = f"https://www.themoviedb.org/{media_path}/{item['tmdb_id']}"
 
     return {"releases": merged}

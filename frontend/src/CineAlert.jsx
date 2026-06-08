@@ -185,6 +185,7 @@ export default function CineAlert() {
   const [released, setReleased] = useState([]);
   const [loadingReleased, setLoadingReleased] = useState(false);
   const [rFilterLangs, setRFilterLangs] = useState([]);
+  const [rFilterPlatforms, setRFilterPlatforms] = useState([]);
   const [rFilterType, setRFilterType] = useState("all");
   const [rFilterSort, setRFilterSort] = useState("date");
   const [rFilterSearch, setRFilterSearch] = useState("");
@@ -616,6 +617,9 @@ export default function CineAlert() {
                 const label = LANG_CODES[code] || code.toUpperCase();
                 if (!rFilterLangs.includes(label)) return false;
               }
+              if (rFilterPlatforms.length > 0) {
+                if (!rFilterPlatforms.some(p => (r.platforms || []).includes(p))) return false;
+              }
               return true;
             })
             .slice()
@@ -633,7 +637,7 @@ export default function CineAlert() {
           });
           const years = Object.keys(byYear).sort((a, b) => b - a); // 2026 → 2020
 
-          const hasActiveFilter = rFilterSearch || rFilterType !== "all" || rFilterLangs.length > 0;
+          const hasActiveFilter = rFilterSearch || rFilterType !== "all" || rFilterLangs.length > 0 || rFilterPlatforms.length > 0;
 
           return (
             <div>
@@ -695,6 +699,28 @@ export default function CineAlert() {
                     )}
                   </div>
                 )}
+
+                {/* Platform chips */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {PLATFORMS.map(p => {
+                    const on = rFilterPlatforms.includes(p.id);
+                    const meta = PLATFORM_META[p.id];
+                    return (
+                      <button key={p.id} onClick={() => setRFilterPlatforms(on ? rFilterPlatforms.filter(x => x !== p.id) : [...rFilterPlatforms, p.id])} style={{
+                        padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
+                        border: on ? `1.5px solid ${p.color}` : `1.5px solid ${t.cardBorder}`,
+                        background: on ? p.color : t.inputBg,
+                        color: on ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
+                        display: "flex", alignItems: "center", gap: 4,
+                      }}>
+                        <span style={{ fontSize: 10, fontWeight: 800 }}>{meta?.icon}</span>{p.label}
+                      </button>
+                    );
+                  })}
+                  {rFilterPlatforms.length > 0 && (
+                    <button onClick={() => setRFilterPlatforms([])} style={{ padding: "4px 11px", borderRadius: 999, fontSize: 11, border: `1.5px solid ${t.cardBorder}`, background: "none", color: "#f87171", cursor: "pointer" }}>✕ Clear</button>
+                  )}
+                </div>
               </div>
 
               {/* Count row */}
@@ -703,7 +729,7 @@ export default function CineAlert() {
                   {loadingReleased ? "Loading…" : `${filtered.length}${hasActiveFilter ? ` of ${released.length}` : ""} titles`}
                 </span>
                 {hasActiveFilter && (
-                  <button onClick={() => { setRFilterSearch(""); setRFilterType("all"); setRFilterLangs([]); }} style={{ fontSize: 11, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕ Clear all</button>
+                  <button onClick={() => { setRFilterSearch(""); setRFilterType("all"); setRFilterLangs([]); setRFilterPlatforms([]); }} style={{ fontSize: 11, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕ Clear all</button>
                 )}
               </div>
 

@@ -177,10 +177,10 @@ export default function CineAlert() {
                     <button key={l} onClick={() => toggleSet(languages, setLanguages, l)} style={{
                       padding: "7px 16px", borderRadius: 999,
                       border: on ? "1.5px solid #7c3aed" : "1.5px solid #1e1e2e",
-                      background: on ? "rgba(124,58,237,0.15)" : "#13131f",
+                      background: on ? "#7c3aed" : "#13131f",
                       cursor: "pointer", fontSize: 13,
                       fontWeight: on ? 600 : 400,
-                      color: on ? "#a78bfa" : "#64748b",
+                      color: on ? "#fff" : "#64748b",
                       transition: "all 0.2s",
                       boxShadow: on ? "0 0 12px rgba(124,58,237,0.2)" : "none",
                     }}>{l}</button>
@@ -199,10 +199,10 @@ export default function CineAlert() {
                       display: "flex", alignItems: "center", gap: 6,
                       padding: "8px 18px", borderRadius: 10,
                       border: on ? "1.5px solid #3b82f6" : "1.5px solid #1e1e2e",
-                      background: on ? "rgba(59,130,246,0.12)" : "#13131f",
+                      background: on ? "#2563eb" : "#13131f",
                       cursor: "pointer", fontSize: 13,
                       fontWeight: on ? 600 : 400,
-                      color: on ? "#60a5fa" : "#64748b",
+                      color: on ? "#fff" : "#64748b",
                       transition: "all 0.2s",
                     }}><span>{icons[i]}</span>{ct}</button>
                   );
@@ -253,13 +253,24 @@ export default function CineAlert() {
                       <div style={{ width: 48, height: 64, borderRadius: 8, background: "#1e1e2e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎬</div>
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "#f1f5f9", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
-                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, display: "flex", gap: 8 }}>
-                        <span>{r.media_type}</span>
-                        <span>·</span>
-                        <span>{r.language}</span>
+                      <a href={r.tmdb_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#f1f5f9", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
+                      </a>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ textTransform: "capitalize" }}>{r.media_type}</span>
                         {r.rating ? <><span>·</span><span style={{ color: "#fbbf24" }}>★ {r.rating.toFixed(1)}</span></> : null}
                       </div>
+                      {r.platforms && r.platforms.length > 0 && (
+                        <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
+                          {r.platforms.map(p => (
+                            <span key={p} style={{
+                              fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 5,
+                              background: "#1e1e2e", color: "#a78bfa", border: "1px solid #2d2d4e",
+                              letterSpacing: "0.02em"
+                            }}>{p}</span>
+                          ))}
+                        </div>
+                      )}
                       {r.overview && <div style={{ fontSize: 12, color: "#475569", marginTop: 6, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.overview}</div>}
                     </div>
                     <div style={{ flexShrink: 0, textAlign: "right" }}>

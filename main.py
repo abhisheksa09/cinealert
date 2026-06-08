@@ -107,6 +107,11 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 
 # ── API Routes ────────────────────────────────────────────────────────────────
+PROVIDER_NAMES = {
+    "8": "Netflix", "9": "Prime Video", "337": "Disney+", "350": "Apple TV+",
+    "384": "HBO Max", "122": "Jio Hotstar", "232": "Zee5", "237": "SonyLIV",
+}
+
 @app.get("/releases")
 async def get_releases(languages: str = "", platforms: str = "", days_ahead: int = 30, media_type: str = "movie"):
     """Preview upcoming releases via TMDB (used by frontend)."""
@@ -117,7 +122,14 @@ async def get_releases(languages: str = "", platforms: str = "", days_ahead: int
         for lang_code in lang_codes[:3]:
             data = await fetch_upcoming(client, media_type, lang_code, days_ahead)
             results.extend(data)
-    return {"releases": results[:30]}
+    results = results[:15]
+    # Fetch provider info for each result
+    async with httpx.AsyncClient() as client:
+        for item in results:
+            provider_ids = await get_watch_providers(client, item["tmdb_id"], media_type)
+            item["platforms"] = [PROVIDER_NAMES[pid] for pid in provider_ids if pid in PROVIDER_NAMES]
+            item["tmdb_url"] = f"https://www.themoviedb.org/{'movie' if media_type in ('movie', 'Movies') else 'tv'}/{item['tmdb_id']}"
+    return {"releases": results}
 
 @app.post("/scan")
 async def trigger_scan():

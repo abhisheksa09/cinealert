@@ -288,9 +288,9 @@ export default function CineAlert() {
           {/* Tabs */}
           <div style={{ display: "flex", gap: 4 }}>
             {[
-              { id: "releases", label: "Upcoming" },
-              { id: "streaming", label: "Streaming" },
-              { id: "released", label: "Releases" },
+              { id: "releases", label: "In Theatres" },
+              { id: "streaming", label: "Coming to OTT" },
+              { id: "released", label: "Out Now" },
             ].map(tab_ => (
               <button key={tab_.id} onClick={() => setTab(tab_.id)} style={{
                 padding: "9px 20px", fontSize: 13, border: "none", borderRadius: "10px 10px 0 0",

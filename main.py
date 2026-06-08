@@ -185,14 +185,9 @@ async def get_released(languages: str = "", media_type: str = "movie", from_year
                     seen_ids.add(item["tmdb_id"])
                     merged.append(item)
 
-    # Fetch provider info concurrently
     media_path = "movie" if media_type in ("movie", "Movies") else "tv"
-    async with httpx.AsyncClient() as client:
-        provider_tasks = [get_watch_providers(client, item["tmdb_id"], media_type) for item in merged]
-        all_providers = await asyncio.gather(*provider_tasks)
-
-    for item, provider_ids in zip(merged, all_providers):
-        item["platforms"] = [PROVIDER_NAMES[pid] for pid in provider_ids if pid in PROVIDER_NAMES]
+    for item in merged:
+        item["platforms"] = []
         item["tmdb_url"] = f"https://www.themoviedb.org/{media_path}/{item['tmdb_id']}"
 
     return {"releases": merged}

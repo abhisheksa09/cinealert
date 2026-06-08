@@ -733,54 +733,8 @@ export default function CineAlert() {
                         color: rFilterSort === opt.val ? "#fff" : t.textMuted, cursor: "pointer", transition: "all 0.18s",
                       }}>{opt.label}</button>
                     ))}
-                    {/* Filters dropdown button */}
-                    <button onClick={() => setRFilterOpen(o => !o)} style={{
-                      padding: "5px 12px", borderRadius: 999, fontSize: 12, display: "flex", alignItems: "center", gap: 5,
-                      border: rFilterPlatforms.length > 0 ? "1.5px solid #0ea5e9" : `1.5px solid ${t.cardBorder}`,
-                      background: rFilterPlatforms.length > 0 ? "#0ea5e920" : t.inputBg,
-                      color: rFilterPlatforms.length > 0 ? "#0ea5e9" : t.textMuted,
-                      cursor: "pointer", transition: "all 0.18s", fontWeight: 500,
-                    }}>
-                      ⚙ Platform filter
-                      {rFilterPlatforms.length > 0 && (
-                        <span style={{ background: "#0ea5e9", color: "#fff", borderRadius: 999, fontSize: 10, fontWeight: 700, padding: "1px 6px" }}>
-                          {rFilterPlatforms.length}
-                        </span>
-                      )}
-                    </button>
                   </div>
                 </div>
-
-                {/* Collapsible platform filter */}
-                {rFilterOpen && (
-                  <div style={{ borderTop: `1px solid ${t.cardBorder}`, paddingTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {PLATFORMS.map(p => {
-                        const on = rFilterPlatforms.includes(p.id);
-                        const meta = PLATFORM_META[p.id];
-                        return (
-                          <button key={p.id} onClick={() => setRFilterPlatforms(on ? rFilterPlatforms.filter(x => x !== p.id) : [...rFilterPlatforms, p.id])} style={{
-                            padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
-                            border: "none",
-                            background: on ? (isDark ? p.bg : p.color + "18") : t.inputBg,
-                            color: on ? (isDark ? "#fff" : p.color) : t.textMuted, cursor: "pointer", transition: "all 0.18s",
-                            display: "flex", alignItems: "center", gap: 4,
-                            boxShadow: on ? `0 0 0 1.5px ${p.color}80` : `0 0 0 1px ${t.cardBorder}`,
-                          }}>
-                            {meta?.logo
-                              ? <img src={meta.logo} alt="" style={{ width: 12, height: 12, objectFit: "contain", borderRadius: 2 }} />
-                              : <span style={{ fontSize: 10, fontWeight: 800 }}>{meta?.icon}</span>
-                            }
-                            {p.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {rFilterPlatforms.length > 0 && (
-                      <button onClick={() => setRFilterPlatforms([])} style={{ alignSelf: "flex-start", padding: "4px 11px", borderRadius: 999, fontSize: 11, border: `1.5px solid ${t.cardBorder}`, background: "none", color: "#f87171", cursor: "pointer" }}>✕ Clear</button>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Count row */}

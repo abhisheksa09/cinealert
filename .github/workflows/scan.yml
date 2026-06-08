@@ -1,0 +1,13 @@
+name: Daily CineAlert Scan
+
+on:
+  schedule:
+    - cron: "0 8 * * *"   # 08:00 UTC daily
+  workflow_dispatch:        # allow manual trigger
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scan
+        run: curl -s -X POST https://cinealert-api.onrender.com/scan

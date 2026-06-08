@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: cinealert-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: TMDB_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MY_PLATFORMS
+        sync: false
+      - key: MY_LANGUAGES
+        sync: false
+      - key: MY_TYPES
+        sync: false
+      - key: MY_EMAIL
+        sync: false
+      - key: MY_TELEGRAM_ID
+        sync: false
+      - key: MY_ALERT_FREQ
+        sync: false
+      - key: MY_NOTIFY_NEW
+        sync: false
+      - key: MY_NOTIFY_SOON
+        sync: false
+      - key: MY_NOTIFY_TRAILER
+        sync: false

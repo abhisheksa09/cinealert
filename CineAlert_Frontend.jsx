@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+const API_BASE = import.meta.env.VITE_API_URL || "https://cinealert-api.onrender.com";
 
 const PLATFORMS = [
   { id: "netflix", label: "Netflix", color: "#e50914" },
@@ -12,15 +14,6 @@ const PLATFORMS = [
 const LANGUAGES = ["English", "Hindi", "Dutch", "Tamil", "Telugu", "Korean", "Spanish", "Japanese", "French", "German"];
 
 const CONTENT_TYPES = ["Movies", "Series", "Documentaries", "Anime"];
-
-const SAMPLE_RELEASES = [
-  { title: "Paatal Lok S2", platform: "prime", lang: "Hindi", type: "Series", date: "Jun 14", status: "new", emoji: "🔍" },
-  { title: "Maharaj", platform: "netflix", lang: "Hindi", type: "Movie", date: "Jun 21", status: "soon", emoji: "⚔️" },
-  { title: "House of the Dragon S3", platform: "hbo", lang: "English", type: "Series", date: "Jun 16", status: "new", emoji: "🐉" },
-  { title: "Presumed Innocent S2", platform: "apple", lang: "English", type: "Series", date: "Jun 25", status: "soon", emoji: "⚖️" },
-  { title: "IC 814: Kandahar Hijack", platform: "netflix", lang: "Hindi", type: "Series", date: "Jun 29", status: "soon", emoji: "✈️" },
-  { title: "The Boys S5", platform: "prime", lang: "English", type: "Series", date: "Jul 4", status: "soon", emoji: "💥" },
-];
 
 function Toggle({ on, onChange }) {
   return (
@@ -39,7 +32,7 @@ function Toggle({ on, onChange }) {
   );
 }
 
-export default function StreamAlert() {
+export default function CineAlert() {
   const [tab, setTab] = useState("prefs");
   const [platforms, setPlatforms] = useState(["netflix", "prime", "hbo"]);
   const [languages, setLanguages] = useState(["English", "Hindi"]);
@@ -53,15 +46,24 @@ export default function StreamAlert() {
   const [notifySoon, setNotifySoon] = useState(true);
   const [notifyTrailer, setNotifyTrailer] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [releases, setReleases] = useState([]);
+  const [loadingReleases, setLoadingReleases] = useState(false);
 
   const toggleSet = (set, setter, val) =>
     setter(set.includes(val) ? set.filter(x => x !== val) : [...set, val]);
 
-  const getPlatform = (id) => PLATFORMS.find(p => p.id === id);
+  const getPlatform = (id) => PLATFORMS.find(p => p.id === id) || PLATFORMS[0];
 
-  const filteredReleases = SAMPLE_RELEASES.filter(
-    r => platforms.includes(r.platform) && languages.includes(r.lang) && types.includes(r.type)
-  );
+  useEffect(() => {
+    if (tab !== "releases") return;
+    setLoadingReleases(true);
+    const mediaType = types.includes("Movies") ? "movie" : "tv";
+    fetch(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=${mediaType}`)
+      .then(r => r.json())
+      .then(data => setReleases(data.releases || []))
+      .catch(() => setReleases([]))
+      .finally(() => setLoadingReleases(false));
+  }, [tab, languages, platforms, types]);
 
   const handleSave = () => {
     setSaved(true);
@@ -72,9 +74,9 @@ export default function StreamAlert() {
     <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", maxWidth: 520, margin: "0 auto", padding: "1.5rem 1rem" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "1.75rem" }}>
-        <div style={{ width: 42, height: 42, borderRadius: 10, background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>📡</div>
+        <div style={{ width: 42, height: 42, borderRadius: 10, background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🎬</div>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: "#0f172a" }}>StreamAlert</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: "#0f172a" }}>CineAlert</div>
           <div style={{ fontSize: 12, color: "#64748b", marginTop: 1 }}>Track new OTT releases · Get notified instantly</div>
         </div>
         {saved && (
@@ -156,40 +158,35 @@ export default function StreamAlert() {
       {tab === "releases" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 13, color: "#64748b" }}>{filteredReleases.length} titles matching your preferences</span>
-            <span style={{ fontSize: 11, color: "#94a3b8" }}>Demo data — TMDB live in backend</span>
+            <span style={{ fontSize: 13, color: "#64748b" }}>{releases.length} titles matching your preferences</span>
+            {loadingReleases && <span style={{ fontSize: 11, color: "#94a3b8" }}>Loading…</span>}
           </div>
-          {filteredReleases.length === 0 ? (
+          {releases.length === 0 && !loadingReleases ? (
             <div style={{ textAlign: "center", padding: "2rem", color: "#94a3b8", fontSize: 14 }}>No matches. Adjust platforms or languages.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {filteredReleases.map((r, i) => {
-                const plat = getPlatform(r.platform);
-                return (
-                  <div key={i} style={{
-                    display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
-                    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
-                    transition: "border-color 0.15s"
-                  }}>
-                    <div style={{ width: 42, height: 56, borderRadius: 6, background: plat.color + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{r.emoji}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
-                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 3, display: "flex", alignItems: "center", gap: 5 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: plat.color }} />
-                        {r.type} · {r.lang}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{
-                        fontSize: 11, padding: "2px 8px", borderRadius: 999, fontWeight: 600,
-                        background: r.status === "new" ? "#dcfce7" : "#fef9c3",
-                        color: r.status === "new" ? "#166534" : "#854d0e"
-                      }}>{r.status === "new" ? "New" : "Soon"}</div>
-                      <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>{r.date}</div>
+              {releases.map((r, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
+                  background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+                }}>
+                  {r.poster ? (
+                    <img src={r.poster} alt={r.title} style={{ width: 42, height: 56, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: 42, height: 56, borderRadius: 6, background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🎬</div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+                      {r.media_type} · {r.language}
+                      {r.rating ? ` · ⭐ ${r.rating.toFixed(1)}` : ""}
                     </div>
                   </div>
-                );
-              })}
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, color: "#94a3b8" }}>{r.release_date || "TBA"}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -232,7 +229,17 @@ export default function StreamAlert() {
             <AlertRow icon="🎬" title="Trailer drops" sub="When official trailers are released" on={notifyTrailer} toggle={() => setNotifyTrailer(x => !x)} />
           </Card>
 
-          <SaveBtn onClick={handleSave} style={{ marginTop: "1.5rem" }}>Save alert settings</SaveBtn>
+          <div style={{ marginTop: "1.5rem", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 16px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>Your .env snippet</div>
+            <pre style={{ fontSize: 11, color: "#475569", margin: 0, whiteSpace: "pre-wrap" }}>{`MY_TELEGRAM_ID=${chatId || "@yourhandle"}
+MY_EMAIL=${email || "you@gmail.com"}
+MY_ALERT_FREQ=${freq === "Daily digest" ? "daily" : freq === "Weekly digest" ? "weekly" : "instant"}
+MY_NOTIFY_NEW=${notifyNew}
+MY_NOTIFY_SOON=${notifySoon}
+MY_NOTIFY_TRAILER=${notifyTrailer}`}</pre>
+          </div>
+
+          <SaveBtn onClick={handleSave} style={{ marginTop: "1rem" }}>Save alert settings</SaveBtn>
         </div>
       )}
     </div>

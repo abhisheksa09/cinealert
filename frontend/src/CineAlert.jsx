@@ -24,13 +24,22 @@ const PLATFORM_META = {
   sonyliv:  { label: "SonyLIV",     color: "#ff4757", icon: "S" },
 };
 
-const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Kannada", "Korean", "Japanese"];
+const LANGUAGES = ["Kannada", "Hindi", "English", "Telugu", "Malayalam", "Tamil", "Korean"];
 const CONTENT_TYPES = ["Movies", "Series", "Documentaries", "Anime"];
 
 const LANG_CODES = {
   en: "English", hi: "Hindi", ta: "Tamil", te: "Telugu",
-  kn: "Kannada", ko: "Korean", ja: "Japanese",
+  kn: "Kannada", ko: "Korean", ja: "Japanese", ml: "Malayalam",
 };
+
+// Reverse lookup: display name OR key → PLATFORM_META entry
+const PLATFORM_BY_NAME = Object.fromEntries(
+  Object.entries(PLATFORM_META).flatMap(([key, meta]) => [
+    [key, meta],
+    [meta.label.toLowerCase(), meta],
+    [meta.label, meta],
+  ])
+);
 
 const THEMES = {
   dark: {
@@ -108,7 +117,7 @@ function Toggle({ on, onChange, theme }) {
 }
 
 function PlatformBadge({ platformKey }) {
-  const meta = PLATFORM_META[platformKey] || {
+  const meta = PLATFORM_BY_NAME[platformKey] || PLATFORM_BY_NAME[platformKey?.toLowerCase()] || {
     label: platformKey, color: "#7c3aed", icon: "?"
   };
   return (
@@ -126,21 +135,32 @@ function PlatformBadge({ platformKey }) {
   );
 }
 
+const STORAGE_KEY = "cinealert_prefs";
+
+function loadPrefs() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return null;
+}
+
 export default function CineAlert() {
-  const [theme, setTheme] = useState("dark");
+  const saved = loadPrefs();
+  const [theme, setTheme] = useState(saved?.theme || "dark");
   const [tab, setTab] = useState("prefs");
-  const [platforms, setPlatforms] = useState(["netflix", "prime", "hbo", "hotstar", "zee5", "sonyliv"]);
-  const [languages, setLanguages] = useState(["English", "Hindi", "Kannada"]);
-  const [types, setTypes] = useState(["Movies", "Series"]);
-  const [telegramOn, setTelegramOn] = useState(true);
-  const [emailOn, setEmailOn] = useState(true);
-  const [chatId, setChatId] = useState("");
-  const [email, setEmail] = useState("");
-  const [freq, setFreq] = useState("instant");
-  const [notifyNew, setNotifyNew] = useState(true);
-  const [notifySoon, setNotifySoon] = useState(true);
-  const [notifyTrailer, setNotifyTrailer] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [platforms, setPlatforms] = useState(saved?.platforms || ["netflix", "prime", "hbo", "hotstar", "zee5", "sonyliv"]);
+  const [languages, setLanguages] = useState(saved?.languages || ["Kannada", "Hindi", "English"]);
+  const [types, setTypes] = useState(saved?.types || ["Movies", "Series", "Documentaries", "Anime"]);
+  const [telegramOn, setTelegramOn] = useState(saved?.telegramOn ?? true);
+  const [emailOn, setEmailOn] = useState(saved?.emailOn ?? true);
+  const [chatId, setChatId] = useState(saved?.chatId || "");
+  const [email, setEmail] = useState(saved?.email || "");
+  const [freq, setFreq] = useState(saved?.freq || "instant");
+  const [notifyNew, setNotifyNew] = useState(saved?.notifyNew ?? true);
+  const [notifySoon, setNotifySoon] = useState(saved?.notifySoon ?? true);
+  const [notifyTrailer, setNotifyTrailer] = useState(saved?.notifyTrailer ?? false);
+  const [saveFlash, setSaveFlash] = useState(false);
   const [releases, setReleases] = useState([]);
   const [loadingReleases, setLoadingReleases] = useState(false);
 
@@ -162,8 +182,14 @@ export default function CineAlert() {
   }, [tab, languages, platforms, types]);
 
   const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    const prefs = {
+      theme, platforms, languages, types,
+      telegramOn, emailOn, chatId, email, freq,
+      notifyNew, notifySoon, notifyTrailer,
+    };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)); } catch {}
+    setSaveFlash(true);
+    setTimeout(() => setSaveFlash(false), 2500);
   };
 
   const inputStyle = {
@@ -197,7 +223,7 @@ export default function CineAlert() {
             </div>
 
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-              {saved && (
+              {saveFlash && (
                 <div style={{
                   fontSize: 12, color: "#4ade80",
                   background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)",
@@ -205,7 +231,14 @@ export default function CineAlert() {
                 }}>✓ Saved</div>
               )}
               {/* Theme toggle */}
-              <button onClick={() => setTheme(isDark ? "light" : "dark")} style={{
+              <button onClick={() => {
+                const next = isDark ? "light" : "dark";
+                setTheme(next);
+                try {
+                  const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify({...p, theme: next}));
+                } catch {}
+              }} style={{
                 width: 36, height: 36, borderRadius: 10, border: `1px solid ${t.headerBorder}`,
                 background: t.iconBg, cursor: "pointer", fontSize: 17,
                 display: "flex", alignItems: "center", justifyContent: "center",

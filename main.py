@@ -52,12 +52,14 @@ WATCHMODE_SOURCE_MAP = {
     "hbo":     387,
 }
 
-# MovieOfTheNight catalog IDs for Indian platforms
+# MovieOfTheNight catalog IDs — only Indian-exclusive platforms (saves quota)
 MOTN_CATALOG_MAP = {
     "hotstar": "hotstar",
     "zee5":    "zee5",
     "sonyliv": "sonyliv",
 }
+# Platforms intentionally excluded from MOTN (covered by Watchmode instead)
+# netflix, prime, disney, apple, hbo → Watchmode handles these
 DB_URL     = os.getenv("DATABASE_URL")
 TG_TOKEN      = os.getenv("TELEGRAM_BOT_TOKEN")
 RESEND_KEY    = os.getenv("RESEND_API_KEY")

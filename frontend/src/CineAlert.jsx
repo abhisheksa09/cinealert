@@ -406,10 +406,10 @@ export default function CineAlert() {
                     return (
                       <button key={p.id} onClick={() => toggleSet(platforms, setPlatforms, p.id)} title={p.label} style={{
                         width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer",
-                        background: on ? p.color : t.inputBg,
+                        background: on ? "#a0a0a0" : t.inputBg,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         transition: "all 0.18s", overflow: "hidden", flexShrink: 0,
-                        boxShadow: on ? `0 0 0 2px ${p.color}55` : `0 0 0 1px ${t.cardBorder}`,
+                        boxShadow: on ? `0 0 0 2px #a0a0a055` : `0 0 0 1px ${t.cardBorder}`,
                         opacity: on ? 1 : 0.45,
                       }}>
                         {meta?.logo
@@ -577,10 +577,10 @@ export default function CineAlert() {
                     return (
                       <button key={p.id} onClick={() => toggleSet(platforms, setPlatforms, p.id)} title={p.label} style={{
                         width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer",
-                        background: on ? p.color : t.inputBg,
+                        background: on ? "#a0a0a0" : t.inputBg,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         transition: "all 0.18s", overflow: "hidden", flexShrink: 0,
-                        boxShadow: on ? `0 0 0 2px ${p.color}55` : `0 0 0 1px ${t.cardBorder}`,
+                        boxShadow: on ? `0 0 0 2px #a0a0a055` : `0 0 0 1px ${t.cardBorder}`,
                         opacity: on ? 1 : 0.45,
                       }}>
                         {meta?.logo

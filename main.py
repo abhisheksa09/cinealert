@@ -9,10 +9,8 @@ Environment variables (.env):
   DATABASE_URL=postgresql+asyncpg://user:pass@neon-host/dbname
   TMDB_API_KEY=your_tmdb_v3_key
   TELEGRAM_BOT_TOKEN=your_bot_token
-  SMTP_HOST=smtp.gmail.com
-  SMTP_PORT=587
-  SMTP_USER=your@gmail.com
-  SMTP_PASS=your_app_password
+  RESEND_API_KEY=re_xxxxxxxxxxxx
+  RESEND_FROM=CineAlert <you@yourdomain.com>
   MY_PLATFORMS=netflix,prime,hbo
   MY_LANGUAGES=English,Hindi
   MY_TYPES=Movies,Series
@@ -35,8 +33,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import aiosmtplib
-from email.message import EmailMessage
 from telegram import Bot
 
 load_dotenv()
@@ -45,11 +41,9 @@ load_dotenv()
 TMDB_BASE = "https://api.themoviedb.org/3"
 TMDB_KEY   = os.getenv("TMDB_API_KEY")
 DB_URL     = os.getenv("DATABASE_URL")
-TG_TOKEN   = os.getenv("TELEGRAM_BOT_TOKEN")
-SMTP_HOST  = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT  = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER  = os.getenv("SMTP_USER")
-SMTP_PASS  = os.getenv("SMTP_PASS")
+TG_TOKEN      = os.getenv("TELEGRAM_BOT_TOKEN")
+RESEND_KEY    = os.getenv("RESEND_API_KEY")
+RESEND_FROM   = os.getenv("RESEND_FROM", "CineAlert <onboarding@resend.dev>")
 
 # Single-user prefs from env
 MY_PLATFORMS     = [p.strip() for p in os.getenv("MY_PLATFORMS", "netflix,prime").split(",")]
@@ -236,18 +230,22 @@ async def send_telegram(chat_id: str, text: str):
     await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
 
 
-# ── Email ─────────────────────────────────────────────────────────────────────
+# ── Email (Resend) ────────────────────────────────────────────────────────────
 async def send_email(to: str, subject: str, body: str):
-    if not SMTP_USER:
+    if not RESEND_KEY:
         return
-    msg = EmailMessage()
-    msg["From"] = SMTP_USER
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg.set_content(body)
-    msg.add_alternative(f"<pre>{body}</pre>", subtype="html")
-    await aiosmtplib.send(msg, hostname=SMTP_HOST, port=SMTP_PORT,
-                          username=SMTP_USER, password=SMTP_PASS, start_tls=True)
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_KEY}", "Content-Type": "application/json"},
+            json={
+                "from": RESEND_FROM,
+                "to": [to],
+                "subject": subject,
+                "html": f"<pre style='font-family:sans-serif;white-space:pre-wrap'>{body}</pre>",
+            },
+            timeout=10,
+        )
 
 
 if __name__ == "__main__":

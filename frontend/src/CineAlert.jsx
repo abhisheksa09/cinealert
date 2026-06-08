@@ -244,9 +244,14 @@ export default function CineAlert() {
       }}>
         <div style={{ maxWidth: 600, margin: "0 auto", padding: "0 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+            <div style={{
+              width: 46, height: 46, borderRadius: 14,
+              background: "linear-gradient(135deg, #7c3aed 0%, #e50914 100%)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 22, boxShadow: "0 4px 20px rgba(124,58,237,0.4)"
+            }}>🎬</div>
             <div>
               <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px", color: isDark ? "#fff" : "#1e293b" }}>CineAlert</div>
-              <div style={{ fontSize: 12, color: t.textMuted, marginTop: 1 }}>Track releases · Get notified instantly</div>
             </div>
 
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>

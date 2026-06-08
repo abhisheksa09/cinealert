@@ -13,25 +13,88 @@ const PLATFORMS = [
   { id: "sonyliv",  label: "SonyLIV",     color: "#ff4757", bg: "#1a0005" },
 ];
 
+const PLATFORM_META = {
+  netflix:  { label: "Netflix",     color: "#e50914", icon: "N" },
+  prime:    { label: "Prime Video", color: "#00a8e0", icon: "▶" },
+  disney:   { label: "Disney+",     color: "#4a90e2", icon: "✦" },
+  apple:    { label: "Apple TV+",   color: "#a0a0a0", icon: "" },
+  hbo:      { label: "HBO Max",     color: "#a855f7", icon: "H" },
+  hotstar:  { label: "Jio Hotstar", color: "#1d9bf0", icon: "★" },
+  zee5:     { label: "Zee5",        color: "#9b59b6", icon: "Z" },
+  sonyliv:  { label: "SonyLIV",     color: "#ff4757", icon: "S" },
+};
+
 const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Kannada", "Korean", "Japanese"];
 const CONTENT_TYPES = ["Movies", "Series", "Documentaries", "Anime"];
 
-const PLATFORM_ICONS = {
-  netflix: "N",
-  prime: "▶",
-  disney: "✦",
-  apple: "",
-  hbo: "H",
-  hotstar: "★",
-  zee5: "Z",
-  sonyliv: "S",
+const LANG_CODES = {
+  en: "English", hi: "Hindi", ta: "Tamil", te: "Telugu",
+  kn: "Kannada", ko: "Korean", ja: "Japanese",
 };
 
-function Toggle({ on, onChange }) {
+const THEMES = {
+  dark: {
+    bg: "#0a0a0f",
+    headerBg: "linear-gradient(180deg, #13131f 0%, #0a0a0f 100%)",
+    headerBorder: "#1e1e2e",
+    cardBg: "#13131f",
+    cardBorder: "#1e1e2e",
+    sectionBg: "#13131f",
+    inputBg: "#0a0a0f",
+    inputBorder: "#2a2a3a",
+    text: "#e2e8f0",
+    textMuted: "#64748b",
+    textSecondary: "#94a3b8",
+    tabActive: "#1a1a2e",
+    tabActiveBorder: "#7c3aed",
+    tabActiveColor: "#a78bfa",
+    tabInactiveColor: "#64748b",
+    pillBg: "#1e1e2e",
+    pillText: "#a78bfa",
+    pillBorder: "#2d2d4e",
+    dateBg: "#1e1e2e",
+    toggleOff: "#2a2a3a",
+    sectionLabel: "#4a5568",
+    iconBg: "#1e1e2e",
+    preText: "#7c3aed",
+    preBg: "#13131f",
+    preBorder: "#1e1e2e",
+  },
+  light: {
+    bg: "#f4f6fb",
+    headerBg: "linear-gradient(180deg, #ffffff 0%, #f4f6fb 100%)",
+    headerBorder: "#e2e8f0",
+    cardBg: "#ffffff",
+    cardBorder: "#e2e8f0",
+    sectionBg: "#ffffff",
+    inputBg: "#f8fafc",
+    inputBorder: "#cbd5e1",
+    text: "#1e293b",
+    textMuted: "#94a3b8",
+    textSecondary: "#64748b",
+    tabActive: "#f0f4ff",
+    tabActiveBorder: "#7c3aed",
+    tabActiveColor: "#6d28d9",
+    tabInactiveColor: "#94a3b8",
+    pillBg: "#ede9fe",
+    pillText: "#6d28d9",
+    pillBorder: "#c4b5fd",
+    dateBg: "#f1f5f9",
+    toggleOff: "#cbd5e1",
+    sectionLabel: "#94a3b8",
+    iconBg: "#f1f5f9",
+    preText: "#7c3aed",
+    preBg: "#faf5ff",
+    preBorder: "#e9d5ff",
+  },
+};
+
+function Toggle({ on, onChange, theme }) {
+  const t = THEMES[theme];
   return (
     <div onClick={onChange} style={{
       width: 44, height: 24, borderRadius: 999,
-      background: on ? "linear-gradient(135deg, #7c3aed, #4f46e5)" : "#2a2a3a",
+      background: on ? "linear-gradient(135deg, #7c3aed, #4f46e5)" : t.toggleOff,
       position: "relative", cursor: "pointer", flexShrink: 0,
       transition: "background 0.3s", boxShadow: on ? "0 0 12px rgba(124,58,237,0.4)" : "none"
     }}>
@@ -44,7 +107,27 @@ function Toggle({ on, onChange }) {
   );
 }
 
+function PlatformBadge({ platformKey }) {
+  const meta = PLATFORM_META[platformKey] || {
+    label: platformKey, color: "#7c3aed", icon: "?"
+  };
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
+      background: meta.color + "22",
+      color: meta.color,
+      border: `1px solid ${meta.color}55`,
+      letterSpacing: "0.02em",
+    }}>
+      <span style={{ fontSize: 9 }}>{meta.icon}</span>
+      {meta.label}
+    </span>
+  );
+}
+
 export default function CineAlert() {
+  const [theme, setTheme] = useState("dark");
   const [tab, setTab] = useState("prefs");
   const [platforms, setPlatforms] = useState(["netflix", "prime", "hbo", "hotstar", "zee5", "sonyliv"]);
   const [languages, setLanguages] = useState(["English", "Hindi", "Kannada"]);
@@ -60,6 +143,9 @@ export default function CineAlert() {
   const [saved, setSaved] = useState(false);
   const [releases, setReleases] = useState([]);
   const [loadingReleases, setLoadingReleases] = useState(false);
+
+  const t = THEMES[theme];
+  const isDark = theme === "dark";
 
   const toggleSet = (set, setter, val) =>
     setter(set.includes(val) ? set.filter(x => x !== val) : [...set, val]);
@@ -80,16 +166,22 @@ export default function CineAlert() {
     setTimeout(() => setSaved(false), 2500);
   };
 
+  const inputStyle = {
+    width: "100%", padding: "9px 12px",
+    background: t.inputBg, border: `1px solid ${t.inputBorder}`,
+    borderRadius: 8, color: t.text, fontSize: 13, outline: "none",
+  };
+
   return (
     <div style={{
-      minHeight: "100vh", background: "#0a0a0f",
+      minHeight: "100vh", background: t.bg,
       fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
-      color: "#e2e8f0"
+      color: t.text, transition: "background 0.3s, color 0.3s"
     }}>
       {/* Header */}
       <div style={{
-        background: "linear-gradient(180deg, #13131f 0%, #0a0a0f 100%)",
-        borderBottom: "1px solid #1e1e2e", padding: "20px 0 0"
+        background: t.headerBg,
+        borderBottom: `1px solid ${t.headerBorder}`, padding: "20px 0 0"
       }}>
         <div style={{ maxWidth: 600, margin: "0 auto", padding: "0 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
@@ -100,16 +192,28 @@ export default function CineAlert() {
               fontSize: 22, boxShadow: "0 4px 20px rgba(124,58,237,0.4)"
             }}>🎬</div>
             <div>
-              <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px", color: "#fff" }}>CineAlert</div>
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 1 }}>Track OTT releases · Get notified instantly</div>
+              <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px", color: isDark ? "#fff" : "#1e293b" }}>CineAlert</div>
+              <div style={{ fontSize: 12, color: t.textMuted, marginTop: 1 }}>Track OTT releases · Get notified instantly</div>
             </div>
-            {saved && (
-              <div style={{
-                marginLeft: "auto", fontSize: 12, color: "#4ade80",
-                background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)",
-                padding: "5px 14px", borderRadius: 999, fontWeight: 500
-              }}>✓ Saved</div>
-            )}
+
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+              {saved && (
+                <div style={{
+                  fontSize: 12, color: "#4ade80",
+                  background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)",
+                  padding: "5px 14px", borderRadius: 999, fontWeight: 500
+                }}>✓ Saved</div>
+              )}
+              {/* Theme toggle */}
+              <button onClick={() => setTheme(isDark ? "light" : "dark")} style={{
+                width: 36, height: 36, borderRadius: 10, border: `1px solid ${t.headerBorder}`,
+                background: t.iconBg, cursor: "pointer", fontSize: 17,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: t.text, transition: "all 0.2s"
+              }} title="Toggle theme">
+                {isDark ? "☀️" : "🌙"}
+              </button>
+            </div>
           </div>
 
           {/* Tabs */}
@@ -118,15 +222,15 @@ export default function CineAlert() {
               { id: "prefs", label: "Preferences" },
               { id: "releases", label: "Upcoming" },
               { id: "alerts", label: "Alerts" },
-            ].map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
+            ].map(tab_ => (
+              <button key={tab_.id} onClick={() => setTab(tab_.id)} style={{
                 padding: "9px 20px", fontSize: 13, border: "none", borderRadius: "10px 10px 0 0",
-                background: tab === t.id ? "#1a1a2e" : "transparent",
-                color: tab === t.id ? "#a78bfa" : "#64748b",
-                fontWeight: tab === t.id ? 600 : 400,
+                background: tab === tab_.id ? t.tabActive : "transparent",
+                color: tab === tab_.id ? t.tabActiveColor : t.tabInactiveColor,
+                fontWeight: tab === tab_.id ? 600 : 400,
                 cursor: "pointer", transition: "all 0.2s",
-                borderBottom: tab === t.id ? "2px solid #7c3aed" : "2px solid transparent",
-              }}>{t.label}</button>
+                borderBottom: tab === tab_.id ? `2px solid ${t.tabActiveBorder}` : "2px solid transparent",
+              }}>{tab_.label}</button>
             ))}
           </div>
         </div>
@@ -138,7 +242,7 @@ export default function CineAlert() {
         {/* PREFERENCES TAB */}
         {tab === "prefs" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <Section title="Streaming Platforms">
+            <Section title="Streaming Platforms" t={t}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {PLATFORMS.map(p => {
                   const on = platforms.includes(p.id);
@@ -146,21 +250,21 @@ export default function CineAlert() {
                     <button key={p.id} onClick={() => toggleSet(platforms, setPlatforms, p.id)} style={{
                       display: "flex", alignItems: "center", gap: 10,
                       padding: "10px 14px", borderRadius: 12,
-                      border: on ? `1.5px solid ${p.color}40` : "1.5px solid #1e1e2e",
-                      background: on ? p.bg : "#13131f",
+                      border: on ? `1.5px solid ${p.color}40` : `1.5px solid ${t.cardBorder}`,
+                      background: on ? (isDark ? p.bg : p.color + "15") : t.cardBg,
                       cursor: "pointer", transition: "all 0.2s",
                       boxShadow: on ? `0 0 16px ${p.color}20` : "none",
                     }}>
                       <div style={{
                         width: 28, height: 28, borderRadius: 8,
-                        background: on ? p.color : "#1e1e2e",
+                        background: on ? p.color : t.iconBg,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 13, fontWeight: 800, color: on ? "#fff" : "#444",
+                        fontSize: 13, fontWeight: 800, color: on ? "#fff" : t.textMuted,
                         flexShrink: 0, transition: "all 0.2s",
-                      }}>{PLATFORM_ICONS[p.id]}</div>
+                      }}>{PLATFORM_META[p.id]?.icon}</div>
                       <span style={{
                         fontSize: 13, fontWeight: on ? 600 : 400,
-                        color: on ? "#fff" : "#64748b", transition: "color 0.2s"
+                        color: on ? (isDark ? "#fff" : "#1e293b") : t.textMuted, transition: "color 0.2s"
                       }}>{p.label}</span>
                       {on && <div style={{ marginLeft: "auto", width: 7, height: 7, borderRadius: "50%", background: p.color, flexShrink: 0 }} />}
                     </button>
@@ -169,18 +273,18 @@ export default function CineAlert() {
               </div>
             </Section>
 
-            <Section title="Languages">
+            <Section title="Languages" t={t}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {LANGUAGES.map(l => {
                   const on = languages.includes(l);
                   return (
                     <button key={l} onClick={() => toggleSet(languages, setLanguages, l)} style={{
                       padding: "7px 16px", borderRadius: 999,
-                      border: on ? "1.5px solid #7c3aed" : "1.5px solid #1e1e2e",
-                      background: on ? "#7c3aed" : "#13131f",
+                      border: on ? "1.5px solid #7c3aed" : `1.5px solid ${t.cardBorder}`,
+                      background: on ? "#7c3aed" : t.cardBg,
                       cursor: "pointer", fontSize: 13,
                       fontWeight: on ? 600 : 400,
-                      color: on ? "#fff" : "#64748b",
+                      color: on ? "#fff" : t.textMuted,
                       transition: "all 0.2s",
                       boxShadow: on ? "0 0 12px rgba(124,58,237,0.2)" : "none",
                     }}>{l}</button>
@@ -189,7 +293,7 @@ export default function CineAlert() {
               </div>
             </Section>
 
-            <Section title="Content Types">
+            <Section title="Content Types" t={t}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {CONTENT_TYPES.map((ct, i) => {
                   const on = types.includes(ct);
@@ -198,11 +302,11 @@ export default function CineAlert() {
                     <button key={ct} onClick={() => toggleSet(types, setTypes, ct)} style={{
                       display: "flex", alignItems: "center", gap: 6,
                       padding: "8px 18px", borderRadius: 10,
-                      border: on ? "1.5px solid #3b82f6" : "1.5px solid #1e1e2e",
-                      background: on ? "#2563eb" : "#13131f",
+                      border: on ? "1.5px solid #3b82f6" : `1.5px solid ${t.cardBorder}`,
+                      background: on ? "#2563eb" : t.cardBg,
                       cursor: "pointer", fontSize: 13,
                       fontWeight: on ? 600 : 400,
-                      color: on ? "#fff" : "#64748b",
+                      color: on ? "#fff" : t.textMuted,
                       transition: "all 0.2s",
                     }}><span>{icons[i]}</span>{ct}</button>
                   );
@@ -225,7 +329,7 @@ export default function CineAlert() {
         {tab === "releases" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <span style={{ fontSize: 13, color: "#64748b" }}>{releases.length} titles for you</span>
+              <span style={{ fontSize: 13, color: t.textMuted }}>{releases.length} titles for you</span>
               {loadingReleases && (
                 <span style={{ fontSize: 12, color: "#7c3aed" }}>Loading…</span>
               )}
@@ -233,51 +337,65 @@ export default function CineAlert() {
             {releases.length === 0 && !loadingReleases ? (
               <div style={{
                 textAlign: "center", padding: "3rem 2rem",
-                background: "#13131f", borderRadius: 16,
-                border: "1px solid #1e1e2e", color: "#64748b"
+                background: t.cardBg, borderRadius: 16,
+                border: `1px solid ${t.cardBorder}`, color: t.textMuted
               }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>🎬</div>
                 <div style={{ fontSize: 14 }}>No matches. Adjust your preferences.</div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {releases.map((r, i) => (
-                  <div key={i} style={{
-                    display: "flex", gap: 14, padding: "14px",
-                    background: "#13131f", border: "1px solid #1e1e2e",
-                    borderRadius: 14, transition: "border-color 0.2s",
-                  }}>
-                    {r.poster ? (
-                      <img src={r.poster} alt={r.title} style={{ width: 48, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
-                    ) : (
-                      <div style={{ width: 48, height: 64, borderRadius: 8, background: "#1e1e2e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎬</div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <a href={r.tmdb_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: "#f1f5f9", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
-                      </a>
-                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, display: "flex", gap: 8, alignItems: "center" }}>
-                        <span style={{ textTransform: "capitalize" }}>{r.media_type}</span>
-                        {r.rating ? <><span>·</span><span style={{ color: "#fbbf24" }}>★ {r.rating.toFixed(1)}</span></> : null}
-                      </div>
-                      {r.platforms && r.platforms.length > 0 && (
-                        <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
-                          {r.platforms.map(p => (
-                            <span key={p} style={{
-                              fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 5,
-                              background: "#1e1e2e", color: "#a78bfa", border: "1px solid #2d2d4e",
-                              letterSpacing: "0.02em"
-                            }}>{p}</span>
-                          ))}
-                        </div>
+                {releases.map((r, i) => {
+                  const langLabel = r.language
+                    ? (LANG_CODES[r.language] || r.language.toUpperCase())
+                    : (r.original_language ? (LANG_CODES[r.original_language] || r.original_language.toUpperCase()) : null);
+
+                  return (
+                    <div key={i} style={{
+                      display: "flex", gap: 14, padding: "14px",
+                      background: t.cardBg, border: `1px solid ${t.cardBorder}`,
+                      borderRadius: 14, transition: "border-color 0.2s",
+                    }}>
+                      {r.poster ? (
+                        <img src={r.poster} alt={r.title} style={{ width: 48, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 48, height: 64, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎬</div>
                       )}
-                      {r.overview && <div style={{ fontSize: 12, color: "#475569", marginTop: 6, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.overview}</div>}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <a href={r.tmdb_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
+                        </a>
+                        <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ textTransform: "capitalize" }}>{r.media_type}</span>
+                          {r.rating ? <><span>·</span><span style={{ color: "#fbbf24" }}>★ {r.rating.toFixed(1)}</span></> : null}
+                          {langLabel && (
+                            <>
+                              <span>·</span>
+                              <span style={{
+                                fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
+                                background: isDark ? "#1e293b" : "#f1f5f9",
+                                color: isDark ? "#94a3b8" : "#64748b",
+                                border: `1px solid ${t.cardBorder}`,
+                              }}>{langLabel}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Platform badges */}
+                        {r.platforms && r.platforms.length > 0 && (
+                          <div style={{ display: "flex", gap: 5, marginTop: 7, flexWrap: "wrap" }}>
+                            {r.platforms.map(p => <PlatformBadge key={p} platformKey={p} />)}
+                          </div>
+                        )}
+
+                        {r.overview && <div style={{ fontSize: 12, color: t.textMuted, marginTop: 6, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.overview}</div>}
+                      </div>
+                      <div style={{ flexShrink: 0, textAlign: "right" }}>
+                        <div style={{ fontSize: 11, color: t.textSecondary, background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{r.release_date || "TBA"}</div>
+                      </div>
                     </div>
-                    <div style={{ flexShrink: 0, textAlign: "right" }}>
-                      <div style={{ fontSize: 11, color: "#94a3b8", background: "#1e1e2e", padding: "3px 8px", borderRadius: 6 }}>{r.release_date || "TBA"}</div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -286,11 +404,11 @@ export default function CineAlert() {
         {/* ALERTS TAB */}
         {tab === "alerts" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <Section title="Notification Channels">
+            <Section title="Notification Channels" t={t}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <AlertCard
                   icon="📬" title="Telegram" sub="Instant push notifications"
-                  on={telegramOn} toggle={() => setTelegramOn(x => !x)}
+                  on={telegramOn} toggle={() => setTelegramOn(x => !x)} t={t} theme={theme}
                 >
                   {telegramOn && (
                     <input value={chatId} onChange={e => setChatId(e.target.value)}
@@ -301,7 +419,7 @@ export default function CineAlert() {
 
                 <AlertCard
                   icon="✉️" title="Email" sub="via Resend"
-                  on={emailOn} toggle={() => setEmailOn(x => !x)}
+                  on={emailOn} toggle={() => setEmailOn(x => !x)} t={t} theme={theme}
                 >
                   {emailOn && (
                     <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -321,17 +439,17 @@ export default function CineAlert() {
               </div>
             </Section>
 
-            <Section title="Notify Me When">
+            <Section title="Notify Me When" t={t}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <NotifyRow icon="🟢" title="New release drops" sub="Content is now available to stream" on={notifyNew} toggle={() => setNotifyNew(x => !x)} />
-                <NotifyRow icon="🔜" title="Coming soon" sub="7 days before release" on={notifySoon} toggle={() => setNotifySoon(x => !x)} />
-                <NotifyRow icon="🎞️" title="Trailer drops" sub="When official trailers release" on={notifyTrailer} toggle={() => setNotifyTrailer(x => !x)} />
+                <NotifyRow icon="🟢" title="New release drops" sub="Content is now available to stream" on={notifyNew} toggle={() => setNotifyNew(x => !x)} t={t} theme={theme} />
+                <NotifyRow icon="🔜" title="Coming soon" sub="7 days before release" on={notifySoon} toggle={() => setNotifySoon(x => !x)} t={t} theme={theme} />
+                <NotifyRow icon="🎞️" title="Trailer drops" sub="When official trailers release" on={notifyTrailer} toggle={() => setNotifyTrailer(x => !x)} t={t} theme={theme} />
               </div>
             </Section>
 
-            <div style={{ background: "#13131f", border: "1px solid #1e1e2e", borderRadius: 12, padding: "14px 16px" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#4a5568", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>.env snippet</div>
-              <pre style={{ fontSize: 11, color: "#7c3aed", margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.7 }}>{`MY_TELEGRAM_ID=${chatId || "your_chat_id"}
+            <div style={{ background: t.preBg, border: `1px solid ${t.preBorder}`, borderRadius: 12, padding: "14px 16px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: t.sectionLabel, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>.env snippet</div>
+              <pre style={{ fontSize: 11, color: t.preText, margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.7 }}>{`MY_TELEGRAM_ID=${chatId || "your_chat_id"}
 MY_EMAIL=${email || "you@email.com"}
 MY_ALERT_FREQ=${freq}
 MY_NOTIFY_NEW=${notifyNew}
@@ -353,46 +471,40 @@ MY_NOTIFY_TRAILER=${notifyTrailer}`}</pre>
   );
 }
 
-const inputStyle = {
-  width: "100%", padding: "9px 12px",
-  background: "#0a0a0f", border: "1px solid #2a2a3a",
-  borderRadius: 8, color: "#e2e8f0", fontSize: 13, outline: "none",
-};
-
-function Section({ title, children }) {
+function Section({ title, children, t }) {
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#4a5568", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>{title}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: t.sectionLabel, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>{title}</div>
       {children}
     </div>
   );
 }
 
-function AlertCard({ icon, title, sub, on, toggle, children }) {
+function AlertCard({ icon, title, sub, on, toggle, children, t, theme }) {
   return (
-    <div style={{ background: "#13131f", border: "1px solid #1e1e2e", borderRadius: 12, padding: "14px 16px" }}>
+    <div style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: 12, padding: "14px 16px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: "#1e1e2e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#f1f5f9" }}>{title}</div>
-          <div style={{ fontSize: 12, color: "#64748b", marginTop: 1 }}>{sub}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: theme === "dark" ? "#f1f5f9" : "#1e293b" }}>{title}</div>
+          <div style={{ fontSize: 12, color: t.textMuted, marginTop: 1 }}>{sub}</div>
         </div>
-        <Toggle on={on} onChange={toggle} />
+        <Toggle on={on} onChange={toggle} theme={theme} />
       </div>
       {children}
     </div>
   );
 }
 
-function NotifyRow({ icon, title, sub, on, toggle }) {
+function NotifyRow({ icon, title, sub, on, toggle, t, theme }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#13131f", border: "1px solid #1e1e2e", borderRadius: 12, padding: "12px 16px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: 12, padding: "12px 16px" }}>
       <span style={{ fontSize: 18 }}>{icon}</span>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "#f1f5f9" }}>{title}</div>
-        <div style={{ fontSize: 12, color: "#64748b", marginTop: 1 }}>{sub}</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: theme === "dark" ? "#f1f5f9" : "#1e293b" }}>{title}</div>
+        <div style={{ fontSize: 12, color: t.textMuted, marginTop: 1 }}>{sub}</div>
       </div>
-      <Toggle on={on} onChange={toggle} />
+      <Toggle on={on} onChange={toggle} theme={theme} />
     </div>
   );
 }

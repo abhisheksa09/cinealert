@@ -115,6 +115,13 @@ async def init_db():
             items       JSONB NOT NULL
         );
         """)
+        await conn.execute("""
+        CREATE TABLE IF NOT EXISTS api_cache (
+            cache_key   TEXT PRIMARY KEY,
+            fetched_at  TIMESTAMPTZ DEFAULT now(),
+            data        JSONB NOT NULL
+        );
+        """)
 
 
 # ── Lifespan (startup/shutdown) ───────────────────────────────────────────────
@@ -137,18 +144,32 @@ app = FastAPI(title="CineAlert API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
-# ── Simple TTL cache ──────────────────────────────────────────────────────────
-_cache: dict = {}  # key -> (value, expires_at)
-CACHE_TTL = 2 * 60 * 60  # 2 hours in seconds
+# ── DB-backed cache (survives restarts) ───────────────────────────────────────
+CACHE_TTL_HOURS = 2
 
-def cache_get(key: str):
-    entry = _cache.get(key)
-    if entry and datetime.utcnow().timestamp() < entry[1]:
-        return entry[0]
+async def cache_get(key: str):
+    p = await get_pool()
+    async with p.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT data FROM api_cache
+               WHERE cache_key = $1
+                 AND fetched_at > now() - interval '2 hours'""",
+            key
+        )
+    if row:
+        return json.loads(row["data"]) if isinstance(row["data"], str) else row["data"]
     return None
 
-def cache_set(key: str, value):
-    _cache[key] = (value, datetime.utcnow().timestamp() + CACHE_TTL)
+async def cache_set(key: str, value):
+    p = await get_pool()
+    async with p.acquire() as conn:
+        await conn.execute(
+            """INSERT INTO api_cache (cache_key, fetched_at, data)
+               VALUES ($1, now(), $2::jsonb)
+               ON CONFLICT (cache_key) DO UPDATE
+                 SET data = EXCLUDED.data, fetched_at = now()""",
+            key, json.dumps(value)
+        )
 
 
 # ── API Routes ────────────────────────────────────────────────────────────────
@@ -173,7 +194,7 @@ PROVIDER_NAMES = {
 async def get_releases(languages: str = "", platforms: str = "", days_ahead: int = 30, media_type: str = "movie"):
     """Preview upcoming releases via TMDB (used by frontend)."""
     cache_key = f"releases:{languages}:{media_type}"
-    cached = cache_get(cache_key)
+    cached = await cache_get(cache_key)
     if cached is not None:
         return cached
 
@@ -211,14 +232,14 @@ async def get_releases(languages: str = "", platforms: str = "", days_ahead: int
         item["tmdb_url"] = f"https://www.themoviedb.org/{media_path}/{item['tmdb_id']}"
 
     response = {"releases": results}
-    cache_set(cache_key, response)
+    await cache_set(cache_key, response)
     return response
 
 @app.get("/released")
 async def get_released(languages: str = "", media_type: str = "movie", from_year: int = 2020):
     """Already-released titles from from_year up to today, per selected languages."""
     cache_key = f"released:{languages}:{media_type}:{from_year}"
-    cached = cache_get(cache_key)
+    cached = await cache_get(cache_key)
     if cached is not None:
         return cached
 
@@ -259,7 +280,7 @@ async def get_released(languages: str = "", media_type: str = "movie", from_year
         item["tmdb_url"] = f"https://www.themoviedb.org/{media_path}/{item['tmdb_id']}"
 
     response = {"releases": merged}
-    cache_set(cache_key, response)
+    await cache_set(cache_key, response)
     return response
 
 

@@ -125,7 +125,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     scheduler.add_job(daily_scan, "cron", hour=8, minute=0)
     # Refresh streaming cache every 6 hours; also run once immediately on startup
-    scheduler.add_job(refresh_streaming_cache, "interval", hours=6)
+    scheduler.add_job(refresh_streaming_cache, "interval", hours=24)
     scheduler.start()
     asyncio.create_task(refresh_streaming_cache())  # populate on first boot
     yield

@@ -24,6 +24,7 @@ Environment variables (.env):
 
 import os
 import asyncio
+import json
 from datetime import date, datetime, timedelta
 from contextlib import asynccontextmanager
 
@@ -107,6 +108,13 @@ async def init_db():
             PRIMARY KEY (tmdb_id, media_type)
         );
         """)
+        await conn.execute("""
+        CREATE TABLE IF NOT EXISTS streaming_cache (
+            id          SERIAL PRIMARY KEY,
+            fetched_at  TIMESTAMPTZ DEFAULT now(),
+            items       JSONB NOT NULL
+        );
+        """)
 
 
 # ── Lifespan (startup/shutdown) ───────────────────────────────────────────────
@@ -116,7 +124,10 @@ scheduler = AsyncIOScheduler()
 async def lifespan(app: FastAPI):
     await init_db()
     scheduler.add_job(daily_scan, "cron", hour=8, minute=0)
+    # Refresh streaming cache every 6 hours; also run once immediately on startup
+    scheduler.add_job(refresh_streaming_cache, "interval", hours=6)
     scheduler.start()
+    asyncio.create_task(refresh_streaming_cache())  # populate on first boot
     yield
     scheduler.shutdown()
     if pool:
@@ -294,39 +305,55 @@ async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, 
 
 
 @app.get("/streaming-upcoming")
-async def get_streaming_upcoming(platforms: str = "", days_ahead: int = 45):
-    """Return shows arriving soon — Watchmode for global platforms, MOTN for Indian platforms."""
-    cache_key = f"streaming-upcoming:{platforms}"
-    cached = cache_get(cache_key)
-    if cached is not None:
-        return cached
+async def get_streaming_upcoming(platforms: str = ""):
+    """Return shows arriving soon — served from DB cache, refreshed every 6 hours by background job."""
+    p = await get_pool()
+    async with p.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT items, fetched_at FROM streaming_cache ORDER BY fetched_at DESC LIMIT 1"
+        )
 
-    platform_list = [p.strip() for p in platforms.split(",")] if platforms else list(WATCHMODE_SOURCE_MAP.keys()) + list(MOTN_CATALOG_MAP.keys())
+    if not row:
+        return {"items": [], "cached_at": None}
 
+    all_items = json.loads(row["items"]) if isinstance(row["items"], str) else row["items"]
+
+    # Filter by requested platforms if provided
+    if platforms:
+        platform_list = {p.strip() for p in platforms.split(",")}
+        all_items = [i for i in all_items if i.get("platform") in platform_list]
+
+    return {
+        "items": all_items,
+        "cached_at": row["fetched_at"].isoformat(),
+    }
+
+
+# ── Background job: refresh Watchmode + MOTN into DB ─────────────────────────
+async def refresh_streaming_cache(days_ahead: int = 45):
+    """Fetch from Watchmode & MOTN and store results in DB. Called every 6 hours."""
     today  = date.today()
     future = today + timedelta(days=days_ahead)
     items  = []
 
     async with httpx.AsyncClient() as client:
         tasks = []
+        all_watchmode_ids = list(WATCHMODE_SOURCE_MAP.values())
+        all_motn_catalogs = list(MOTN_CATALOG_MAP.values())
 
-        # Watchmode — global platforms
-        watchmode_source_ids = [WATCHMODE_SOURCE_MAP[p] for p in platform_list if p in WATCHMODE_SOURCE_MAP]
-        if WATCHMODE_API_KEY and watchmode_source_ids:
-            tasks.append(_fetch_watchmode(client, watchmode_source_ids, today, future))
-
-        # MOTN — Indian platforms
-        motn_catalogs = [MOTN_CATALOG_MAP[p] for p in platform_list if p in MOTN_CATALOG_MAP]
-        if MOTN_API_KEY and motn_catalogs:
-            tasks.append(_fetch_motn(client, motn_catalogs, days_ahead))
+        if WATCHMODE_API_KEY and all_watchmode_ids:
+            tasks.append(_fetch_watchmode(client, all_watchmode_ids, today, future))
+        if MOTN_API_KEY and all_motn_catalogs:
+            tasks.append(_fetch_motn(client, all_motn_catalogs, days_ahead))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
     for r in results:
         if isinstance(r, list):
             items.extend(r)
-    if not tasks:
-        return {"items": []}
+
+    if not items:
+        return  # don't overwrite DB with empty result on API failure
 
     # Deduplicate by title+platform, sort by date
     seen, unique = set(), []
@@ -336,9 +363,19 @@ async def get_streaming_upcoming(platforms: str = "", days_ahead: int = 45):
             seen.add(key)
             unique.append(item)
 
-    response = {"items": unique}
-    cache_set(cache_key, response)
-    return response
+    p = await get_pool()
+    async with p.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO streaming_cache (items) VALUES ($1::jsonb)",
+            json.dumps(unique)
+        )
+        # Keep only the latest 5 rows to avoid unbounded growth
+        await conn.execute("""
+            DELETE FROM streaming_cache
+            WHERE id NOT IN (
+                SELECT id FROM streaming_cache ORDER BY fetched_at DESC LIMIT 5
+            )
+        """)
 
 
 async def _fetch_watchmode(client: httpx.AsyncClient, source_ids: list, today: date, future: date) -> list:

@@ -153,7 +153,7 @@ async def cache_get(key: str):
         row = await conn.fetchrow(
             """SELECT data FROM api_cache
                WHERE cache_key = $1
-                 AND fetched_at > now() - interval '2 hours'""",
+                 AND fetched_at > now() - interval '24 hours'""",
             key
         )
     if row:

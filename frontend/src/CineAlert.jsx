@@ -146,6 +146,18 @@ function PlatformBadge({ platformKey }) {
 
 const STORAGE_KEY = "cinealert_prefs";
 
+// Funny rotating messages shown while the free-tier server wakes from its nap
+const WAKE_MESSAGES = [
+  "🍿 Waking the projectionist up from their nap…",
+  "☕ The server is brewing a coffee — give it a sec.",
+  "🐹 Our free-tier hamster is back on the wheel, running as fast as it can.",
+  "🛌 This app is 100% free, so the server snoozes when nobody's watching.",
+  "💸 Free hosting perk: blockbuster catalog, occasional 30-second yawns.",
+  "🎟️ Rolling out the red carpet… almost showtime.",
+  "🎬 Loading reels… first show after a break always takes a moment.",
+  "🐢 Slow and free beats fast and pricey. Hang tight!",
+];
+
 async function fetchWithRetry(url, retries = 3, delayMs = 20000) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -172,6 +184,11 @@ export default function CineAlert() {
   const [platforms, setPlatforms] = useState(saved?.platforms || ["netflix", "prime", "hbo", "hotstar", "zee5", "sonyliv"]);
   const [languages, setLanguages] = useState(saved?.languages || ["Kannada", "Hindi", "English"]);
   const [types, setTypes] = useState(saved?.types || ["Movies", "Series", "Documentaries", "Anime"]);
+  // Cold-start wake-up: free-tier server sleeps when idle (~30-40s to spin up)
+  const [serverReady, setServerReady] = useState(false);
+  const [waking, setWaking] = useState(false);
+  const [wakeSeconds, setWakeSeconds] = useState(0);
+
   const [releases, setReleases] = useState([]);
   const [loadingReleases, setLoadingReleases] = useState(false);
   const [streamingItems, setStreamingItems] = useState([]);
@@ -198,8 +215,44 @@ export default function CineAlert() {
   const toggleSet = (set, setter, val) =>
     setter(set.includes(val) ? set.filter(x => x !== val) : [...set, val]);
 
+  // Ping the backend on load; show a friendly waiting overlay if it's asleep.
   useEffect(() => {
-    if (tab !== "releases") return;
+    let cancelled = false;
+    let tickTimer;
+    const ready = { current: false };
+
+    // Only reveal the overlay if the server doesn't answer within a short grace
+    // period — keeps a warm server from flashing the screen.
+    const graceTimer = setTimeout(() => {
+      if (!cancelled && !ready.current) {
+        setWaking(true);
+        tickTimer = setInterval(() => setWakeSeconds(s => s + 1), 1000);
+      }
+    }, 2500);
+
+    (async () => {
+      for (let attempt = 0; attempt < 40 && !cancelled; attempt++) {
+        try {
+          const r = await fetch(`${API_BASE}/health`, { cache: "no-store" });
+          if (r.ok) break;
+        } catch {}
+        await new Promise(res => setTimeout(res, 2000));
+      }
+      if (cancelled) return;
+      ready.current = true;
+      setServerReady(true);
+      setWaking(false);
+    })();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(graceTimer);
+      if (tickTimer) clearInterval(tickTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!serverReady || tab !== "releases") return;
     setLoadingReleases(true);
     const wantMovie = types.includes("Movies");
     const wantTV = types.includes("Series") || types.includes("Anime") || types.includes("Documentaries");
@@ -208,18 +261,18 @@ export default function CineAlert() {
     if (wantTV)    fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=tv`).then(d => d?.releases || []));
     if (!fetches.length) { setReleases([]); setLoadingReleases(false); }
     else Promise.all(fetches).then(results => setReleases(results.flat())).finally(() => setLoadingReleases(false));
-  }, [tab, languages, platforms, types]);
+  }, [serverReady, tab, languages, platforms, types]);
 
   useEffect(() => {
-    if (tab !== "streaming") return;
+    if (!serverReady || tab !== "streaming") return;
     setLoadingStreaming(true);
     fetchWithRetry(`${API_BASE}/streaming-upcoming?platforms=${platforms.join(",")}&country=in`)
       .then(d => setStreamingItems(d?.items || []))
       .finally(() => setLoadingStreaming(false));
-  }, [tab, platforms]);
+  }, [serverReady, tab, platforms]);
 
   useEffect(() => {
-    if (tab !== "released") return;
+    if (!serverReady || tab !== "released") return;
     setLoadingReleased(true);
     const wantMovie = types.includes("Movies");
     const wantTV = types.includes("Series") || types.includes("Anime") || types.includes("Documentaries");
@@ -230,7 +283,7 @@ export default function CineAlert() {
     Promise.all(fetches)
       .then(results => setReleased(results.flat()))
       .finally(() => setLoadingReleased(false));
-  }, [tab, languages, types]);
+  }, [serverReady, tab, languages, types]);
 
   // Auto-save preferences whenever they change
   useEffect(() => {
@@ -240,6 +293,8 @@ export default function CineAlert() {
     } catch {}
   }, [platforms, languages, types]);
 
+  // Rotate the funny message every ~4s while waiting
+  const wakeMessage = WAKE_MESSAGES[Math.floor(wakeSeconds / 4) % WAKE_MESSAGES.length];
 
   return (
     <div style={{
@@ -247,6 +302,68 @@ export default function CineAlert() {
       fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
       color: t.text, transition: "background 0.3s, color 0.3s"
     }}>
+      {/* ── Cold-start wake-up overlay (free-tier server spin-up) ── */}
+      {waking && !serverReady && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 2000,
+          background: t.bg,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: "32px 24px", textAlign: "center",
+        }}>
+          <style>{`
+            @keyframes cineSpin { to { transform: rotate(360deg); } }
+            @keyframes cinePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+          `}</style>
+
+          {/* Spinning logo */}
+          <div style={{ position: "relative", width: 84, height: 84, marginBottom: 28 }}>
+            <div style={{
+              position: "absolute", inset: 0, borderRadius: "50%",
+              border: "3px solid " + t.cardBorder,
+              borderTopColor: "#7c3aed",
+              animation: "cineSpin 0.9s linear infinite",
+            }} />
+            <div style={{
+              position: "absolute", inset: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 34, animation: "cinePulse 1.6s ease-in-out infinite",
+            }}>🎬</div>
+          </div>
+
+          <div style={{
+            fontSize: 19, fontWeight: 700, letterSpacing: "-0.3px",
+            color: isDark ? "#fff" : "#1e293b", marginBottom: 10,
+          }}>
+            Waking up CineAlert…
+          </div>
+
+          <div style={{
+            fontSize: 14, color: t.textSecondary, maxWidth: 360,
+            lineHeight: 1.55, marginBottom: 20, minHeight: 44,
+          }}>
+            {wakeMessage}
+          </div>
+
+          {/* Timer */}
+          <div style={{
+            fontSize: 13, fontWeight: 700, color: "#a78bfa",
+            background: t.pillBg, border: `1px solid ${t.pillBorder}`,
+            padding: "6px 16px", borderRadius: 999, marginBottom: 22,
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            ⏱ {wakeSeconds}s — usually ready in 30–40s
+          </div>
+
+          <div style={{
+            fontSize: 12, color: t.textMuted, maxWidth: 320, lineHeight: 1.6,
+          }}>
+            This app is hosted <strong style={{ color: t.textSecondary }}>100% free</strong>, so the
+            server takes a little nap when no one's around. Thanks for your patience! 💜
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{
         background: t.headerBg,

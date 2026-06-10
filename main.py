@@ -144,6 +144,14 @@ app = FastAPI(title="CineAlert API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
+@app.get("/health")
+@app.head("/health")
+async def health():
+    """Lightweight liveness ping — returns instantly once the server is up.
+    Used by the frontend to detect cold starts on free-tier hosting."""
+    return {"status": "ok"}
+
+
 # ── DB-backed cache (survives restarts) ───────────────────────────────────────
 CACHE_TTL_HOURS = 2
 

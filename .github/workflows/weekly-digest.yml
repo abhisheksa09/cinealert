@@ -1,0 +1,29 @@
+name: Weekly CineAlert Digest
+
+on:
+  schedule:
+    - cron: "50 7 * * 6"   # Saturday 07:50 UTC — wakes Render, then sends the weekend digest
+  workflow_dispatch:        # allow manual trigger
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake up Render and wait for it to be ready
+        run: |
+          echo "Pinging server to wake it up..."
+          for i in {1..20}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://cinealert-api.onrender.com/health)
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Server is up!"
+              break
+            fi
+            sleep 15
+          done
+
+      - name: Send weekly digest
+        run: |
+          echo "Triggering weekly digest..."
+          curl -s -X POST --max-time 180 https://cinealert-api.onrender.com/weekly-digest
+          echo "Weekly digest triggered."

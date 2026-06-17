@@ -130,8 +130,9 @@ scheduler = AsyncIOScheduler()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    scheduler.add_job(daily_scan, "cron", hour=8, minute=0)
-    # Refresh streaming cache every 6 hours; also run once immediately on startup
+    # The weekly weekend digest is triggered by the GitHub Action (the free-tier
+    # server sleeps when idle, so an in-process cron can't be relied on to fire).
+    # Keep only the streaming-cache refresh, which also runs on each cold start.
     scheduler.add_job(refresh_streaming_cache, "interval", hours=24)
     scheduler.start()
     asyncio.create_task(refresh_streaming_cache())  # populate on first boot
@@ -498,9 +499,18 @@ async def trigger_scan():
     return {"status": "scan complete"}
 
 
+@app.post("/weekly-digest")
+async def trigger_weekly_digest():
+    """Build & send the weekly weekend digest (theatres + OTT). Triggered by the
+    GitHub Action every Saturday; can also be invoked manually."""
+    await weekly_digest()
+    return {"status": "weekly digest sent"}
+
+
 # ── TMDB helpers ──────────────────────────────────────────────────────────────
-async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, days_ahead: int, limit: int = 5):
+async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, days_ahead: int, limit: int = 5, days_back: int = 0):
     today = date.today()
+    start = today - timedelta(days=days_back)
     future = today + timedelta(days=days_ahead)
     is_tv = media_type not in ("movie", "Movies")
     date_gte_key = "first_air_date.gte" if is_tv else "primary_release_date.gte"
@@ -508,7 +518,7 @@ async def fetch_upcoming(client: httpx.AsyncClient, media_type: str, lang: str, 
     params = {
         "api_key": TMDB_KEY,
         "with_original_language": lang,
-        date_gte_key: today.isoformat(),
+        date_gte_key: start.isoformat(),
         date_lte_key: future.isoformat(),
         "sort_by": "popularity.desc",
         "region": "IN",
@@ -600,11 +610,156 @@ def format_message(releases: list[dict]) -> str:
     return "\n".join(lines)
 
 
-async def dispatch_alert(message: str):
+async def dispatch_alert(message: str, subject: str = "CineAlert: New releases for you!"):
     if MY_TELEGRAM_ID:
         await send_telegram(MY_TELEGRAM_ID, message)
     if MY_EMAIL:
-        await send_email(MY_EMAIL, "CineAlert: New releases for you!", message)
+        await send_email(MY_EMAIL, subject, message)
+
+
+# ── Weekly weekend digest (theatres + OTT) ───────────────────────────────────
+async def build_weekly_digest():
+    """Gather this week's theatrical releases (new + upcoming) and the OTT
+    arrivals coming this week, scoped to the env preferences."""
+    today = date.today()
+
+    # 1) In theatres — released in the past week + upcoming this week, my languages
+    theatre_items = []
+    async with httpx.AsyncClient() as client:
+        for lang_name in MY_LANGUAGES:
+            lang_code = LANG_MAP.get(lang_name, "en")
+            try:
+                items = await fetch_upcoming(client, "Movies", lang_code, days_ahead=7, limit=8, days_back=7)
+            except Exception:
+                continue
+            for it in items:
+                it["language_name"] = lang_name
+            theatre_items.extend(items)
+
+    seen, theatre_unique = set(), []
+    for it in sorted(theatre_items, key=lambda x: x.get("release_date") or "9999"):
+        if it["tmdb_id"] in seen:
+            continue
+        seen.add(it["tmdb_id"])
+        theatre_unique.append(it)
+
+    # 2) Coming to OTT this week — refresh, then read cache filtered to my platforms
+    try:
+        await refresh_streaming_cache()
+    except Exception:
+        pass  # fall back to whatever is already cached
+    p = await get_pool()
+    async with p.acquire() as conn:
+        row = await conn.fetchrow("SELECT items FROM streaming_cache ORDER BY fetched_at DESC LIMIT 1")
+    ott_items = []
+    if row:
+        all_items = json.loads(row["items"]) if isinstance(row["items"], str) else row["items"]
+        today_str = today.isoformat()
+        week_str = (today + timedelta(days=7)).isoformat()
+        for it in all_items:
+            if it.get("platform") not in MY_PLATFORMS:
+                continue
+            ad = it.get("available_date")
+            if ad and today_str <= ad <= week_str:
+                ott_items.append(it)
+        ott_items.sort(key=lambda x: x.get("available_date") or "9999-99-99")
+
+    return theatre_unique, ott_items
+
+
+def format_weekly_digest_md(theatre_items: list, ott_items: list) -> str:
+    lines = ["🎬 *CineAlert — Your Weekend Movie & OTT Digest*\n"]
+
+    lines.append("🎭 *In Theatres — new & upcoming this week*")
+    if theatre_items:
+        for r in theatre_items[:12]:
+            date_str = r.get("release_date") or "TBA"
+            lang = r.get("language_name") or ""
+            rating = f" · ⭐ {r['rating']:.1f}" if r.get("rating") else ""
+            lines.append(f"• *{r['title']}* — {date_str}" + (f" ({lang})" if lang else "") + rating)
+    else:
+        lines.append("_Nothing new tracked this week._")
+
+    lines.append("")
+    lines.append("📺 *Coming to OTT — this week*")
+    if ott_items:
+        for it in ott_items[:12]:
+            date_str = it.get("available_date") or "TBA"
+            plat = it.get("platform_name") or it.get("platform") or ""
+            lines.append(f"• *{it['title']}* — {plat} · {date_str}")
+    else:
+        lines.append("_Nothing new tracked this week._")
+
+    lines.append("")
+    lines.append("🍿 Have a great weekend! — CineAlert")
+    return "\n".join(lines)
+
+
+def _digest_row_html(title: str, date_str: str, sub: str, poster: str, link: str) -> str:
+    if poster:
+        poster_html = f'<img src="{poster}" width="46" height="64" alt="" style="border-radius:6px;display:block;" />'
+    else:
+        poster_html = '<div style="width:46px;height:64px;border-radius:6px;background:#ede9fe;text-align:center;line-height:64px;font-size:22px;">🎬</div>'
+    title_html = f'<a href="{link}" style="color:#1e293b;text-decoration:none;">{title}</a>' if link else title
+    return (
+        '<tr>'
+        f'<td width="58" style="padding:8px 12px 8px 0;vertical-align:top;">{poster_html}</td>'
+        '<td style="padding:8px 0;vertical-align:top;border-bottom:1px solid #f1f5f9;">'
+        f'<div style="font-size:14px;font-weight:600;color:#1e293b;">{title_html}</div>'
+        f'<div style="font-size:12px;color:#64748b;margin-top:3px;">{sub}</div>'
+        f'<div style="font-size:11px;color:#94a3b8;margin-top:2px;">{date_str}</div>'
+        '</td>'
+        '</tr>'
+    )
+
+
+def format_weekly_digest_html(theatre_items: list, ott_items: list) -> str:
+    def section(title, rows_html):
+        body = rows_html or '<tr><td style="font-size:13px;color:#94a3b8;padding:8px 0;">Nothing new tracked this week.</td></tr>'
+        return (
+            f'<h2 style="font-size:15px;color:#7c3aed;margin:22px 0 4px;">{title}</h2>'
+            f'<table style="width:100%;border-collapse:collapse;">{body}</table>'
+        )
+
+    theatre_rows = ""
+    for r in theatre_items[:12]:
+        date_str = r.get("release_date") or "TBA"
+        lang = r.get("language_name") or ""
+        rating = f"⭐ {r['rating']:.1f}" if r.get("rating") else ""
+        sub = " · ".join(x for x in [lang, rating] if x) or "Movie"
+        link = f"https://www.themoviedb.org/movie/{r['tmdb_id']}" if r.get("tmdb_id") else None
+        theatre_rows += _digest_row_html(r["title"], f"🗓 {date_str}", sub, r.get("poster"), link)
+
+    ott_rows = ""
+    for it in ott_items[:12]:
+        date_str = it.get("available_date") or "Coming soon"
+        plat = it.get("platform_name") or it.get("platform") or ""
+        ott_rows += _digest_row_html(it["title"], f"🗓 {date_str}", f"▶ {plat}", it.get("poster"), it.get("link"))
+
+    return (
+        '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">'
+        '<div style="background:linear-gradient(135deg,#7c3aed 0%,#e50914 100%);padding:22px 24px;border-radius:14px 14px 0 0;color:#fff;">'
+        '<div style="font-size:22px;font-weight:800;">🎬 CineAlert</div>'
+        '<div style="font-size:13px;opacity:.9;margin-top:3px;">Your weekend movie &amp; OTT digest</div>'
+        '</div>'
+        '<div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 14px 14px;padding:6px 24px 24px;">'
+        + section("🎭 In Theatres — new &amp; upcoming this week", theatre_rows)
+        + section("📺 Coming to OTT — this week", ott_rows)
+        + '<p style="font-size:13px;color:#64748b;margin-top:24px;border-top:1px solid #e2e8f0;padding-top:14px;">🍿 Have a great weekend!<br/>— CineAlert</p>'
+        '</div></div>'
+    )
+
+
+async def weekly_digest():
+    """Build and send the weekly weekend digest via Telegram + email."""
+    theatre_items, ott_items = await build_weekly_digest()
+    if not theatre_items and not ott_items:
+        return
+    subject = "🎬 CineAlert — Your Weekend Movie & OTT Digest"
+    if MY_TELEGRAM_ID:
+        await send_telegram(MY_TELEGRAM_ID, format_weekly_digest_md(theatre_items, ott_items))
+    if MY_EMAIL:
+        await send_email(MY_EMAIL, subject, "", html=format_weekly_digest_html(theatre_items, ott_items))
 
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
@@ -616,9 +771,10 @@ async def send_telegram(chat_id: str, text: str):
 
 
 # ── Email (Resend) ────────────────────────────────────────────────────────────
-async def send_email(to: str, subject: str, body: str):
+async def send_email(to: str, subject: str, body: str, html: str = None):
     if not RESEND_KEY:
         return
+    html_body = html if html is not None else f"<pre style='font-family:sans-serif;white-space:pre-wrap'>{body}</pre>"
     async with httpx.AsyncClient() as client:
         await client.post(
             "https://api.resend.com/emails",
@@ -627,7 +783,7 @@ async def send_email(to: str, subject: str, body: str):
                 "from": RESEND_FROM,
                 "to": [to],
                 "subject": subject,
-                "html": f"<pre style='font-family:sans-serif;white-space:pre-wrap'>{body}</pre>",
+                "html": html_body,
             },
             timeout=10,
         )

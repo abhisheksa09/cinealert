@@ -82,6 +82,37 @@ LANG_MAP = {
     "Kannada": "kn", "Korean": "ko", "Japanese": "ja", "Malayalam": "ml",
 }
 
+# TMDB language code → display name (for the digest)
+LANG_NAMES = {
+    "en": "English", "hi": "Hindi", "ta": "Tamil", "te": "Telugu",
+    "kn": "Kannada", "ko": "Korean", "ja": "Japanese", "ml": "Malayalam",
+    "es": "Spanish", "fr": "French", "de": "German", "it": "Italian",
+    "zh": "Chinese", "pt": "Portuguese", "ru": "Russian",
+}
+
+# TMDB genre id → name (movie + TV genres)
+GENRE_MAP = {
+    28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+    99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
+    27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance",
+    878: "Sci-Fi", 53: "Thriller", 10752: "War", 37: "Western",
+    10759: "Action & Adventure", 10762: "Kids", 10763: "News", 10764: "Reality",
+    10765: "Sci-Fi & Fantasy", 10766: "Soap", 10767: "Talk", 10768: "War & Politics",
+}
+
+
+def lang_label(code: str) -> str:
+    """Readable language name from a TMDB language code."""
+    if not code:
+        return ""
+    return LANG_NAMES.get(code, code.upper())
+
+
+def genre_labels(genre_ids, limit: int = 3) -> list:
+    """Map TMDB genre ids → readable names (capped)."""
+    names = [GENRE_MAP[g] for g in (genre_ids or []) if g in GENRE_MAP]
+    return names[:limit]
+
 PLATFORM_IDS = {
     "netflix": 8, "prime": 9, "disney": 337, "apple": 350,
     "hbo": 384, "hotstar": 122, "zee5": 232, "sonyliv": 237,
@@ -437,6 +468,7 @@ async def _fetch_watchmode(client: httpx.AsyncClient, source_ids: list, today: d
                 "overview":       "",
                 "poster":         rel.get("poster_url"),
                 "media_type":     tmdb_type,
+                "tmdb_id":        tmdb_id,
                 "platform":       id_to_key.get(sid, str(sid)),
                 "platform_name":  rel.get("source_name"),
                 "available_date": avail_date,
@@ -474,6 +506,9 @@ async def _fetch_motn(client: httpx.AsyncClient, catalogs: list, days_ahead: int
             r.raise_for_status()
             for change in r.json().get("changes", []):
                 show = change.get("show", {})
+                # MOTN tmdbId looks like "movie/12345" — keep just the numeric id
+                raw_tmdb = show.get("tmdbId") or ""
+                tmdb_id = raw_tmdb.split("/")[-1] if raw_tmdb else None
                 for opt in show.get("streamingOptions", {}).get("in", []):
                     avail_ts = opt.get("availableFrom")
                     service  = opt.get("service", {})
@@ -482,6 +517,7 @@ async def _fetch_motn(client: httpx.AsyncClient, catalogs: list, days_ahead: int
                         "overview":       (show.get("overview") or "")[:200],
                         "poster":         ((show.get("imageSet") or {}).get("verticalPoster") or {}).get("w480"),
                         "media_type":     "movie" if change.get("showType") == "movie" else "tv",
+                        "tmdb_id":        tmdb_id,
                         "platform":       service.get("id"),
                         "platform_name":  service.get("name"),
                         "available_date": datetime.utcfromtimestamp(avail_ts).strftime("%Y-%m-%d") if avail_ts else None,
@@ -560,6 +596,21 @@ async def get_watch_providers(client: httpx.AsyncClient, tmdb_id: int, media_typ
             seen.add(pid)
             ids.append(pid)
     return ids
+
+
+async def fetch_tmdb_details(client: httpx.AsyncClient, tmdb_id, media_type: str) -> dict:
+    """Fetch original language + genre names for a title (used to enrich OTT items)."""
+    kind = "movie" if media_type in ("movie", "Movies") else "tv"
+    try:
+        r = await client.get(f"{TMDB_BASE}/{kind}/{tmdb_id}", params={"api_key": TMDB_KEY}, timeout=10)
+        r.raise_for_status()
+        d = r.json()
+        return {
+            "language": d.get("original_language"),
+            "genres": [g["name"] for g in d.get("genres", [])][:3],
+        }
+    except Exception:
+        return {}
 
 
 # ── Daily scan ────────────────────────────────────────────────────────────────
@@ -664,6 +715,22 @@ async def build_weekly_digest():
                 ott_items.append(it)
         ott_items.sort(key=lambda x: x.get("available_date") or "9999-99-99")
 
+    # Cap to what the digest displays, then enrich each with language + genre
+    # via TMDB (the streaming sources don't provide these). TMDB is free/high-limit
+    # and this is a weekly job over ≤12 items, so the extra calls are cheap.
+    ott_items = ott_items[:12]
+    if ott_items:
+        async with httpx.AsyncClient() as client:
+            async def enrich(it):
+                if not it.get("tmdb_id"):
+                    return
+                det = await fetch_tmdb_details(client, it["tmdb_id"], it.get("media_type", "movie"))
+                if det.get("language"):
+                    it["language"] = det["language"]
+                if det.get("genres"):
+                    it["genres"] = det["genres"]
+            await asyncio.gather(*(enrich(it) for it in ott_items))
+
     return theatre_unique, ott_items
 
 
@@ -674,9 +741,13 @@ def format_weekly_digest_md(theatre_items: list, ott_items: list) -> str:
     if theatre_items:
         for r in theatre_items[:12]:
             date_str = r.get("release_date") or "TBA"
-            lang = r.get("language_name") or ""
-            rating = f" · ⭐ {r['rating']:.1f}" if r.get("rating") else ""
-            lines.append(f"• *{r['title']}* — {date_str}" + (f" ({lang})" if lang else "") + rating)
+            meta = [x for x in [
+                r.get("language_name"),
+                ", ".join(genre_labels(r.get("genre_ids"))),
+                f"⭐ {r['rating']:.1f}" if r.get("rating") else "",
+            ] if x]
+            tail = ("  \n  _" + " · ".join(meta) + "_") if meta else ""
+            lines.append(f"• *{r['title']}* — {date_str}{tail}")
     else:
         lines.append("_Nothing new tracked this week._")
 
@@ -686,7 +757,12 @@ def format_weekly_digest_md(theatre_items: list, ott_items: list) -> str:
         for it in ott_items[:12]:
             date_str = it.get("available_date") or "TBA"
             plat = it.get("platform_name") or it.get("platform") or ""
-            lines.append(f"• *{it['title']}* — {plat} · {date_str}")
+            meta = [x for x in [
+                lang_label(it.get("language")),
+                ", ".join(it.get("genres") or []),
+            ] if x]
+            tail = ("  \n  _" + " · ".join(meta) + "_") if meta else ""
+            lines.append(f"• *{it['title']}* — {plat} · {date_str}{tail}")
     else:
         lines.append("_Nothing new tracked this week._")
 
@@ -725,8 +801,9 @@ def format_weekly_digest_html(theatre_items: list, ott_items: list) -> str:
     for r in theatre_items[:12]:
         date_str = r.get("release_date") or "TBA"
         lang = r.get("language_name") or ""
+        genres = ", ".join(genre_labels(r.get("genre_ids")))
         rating = f"⭐ {r['rating']:.1f}" if r.get("rating") else ""
-        sub = " · ".join(x for x in [lang, rating] if x) or "Movie"
+        sub = " · ".join(x for x in [lang, genres, rating] if x) or "Movie"
         link = f"https://www.themoviedb.org/movie/{r['tmdb_id']}" if r.get("tmdb_id") else None
         theatre_rows += _digest_row_html(r["title"], f"🗓 {date_str}", sub, r.get("poster"), link)
 
@@ -734,7 +811,10 @@ def format_weekly_digest_html(theatre_items: list, ott_items: list) -> str:
     for it in ott_items[:12]:
         date_str = it.get("available_date") or "Coming soon"
         plat = it.get("platform_name") or it.get("platform") or ""
-        ott_rows += _digest_row_html(it["title"], f"🗓 {date_str}", f"▶ {plat}", it.get("poster"), it.get("link"))
+        lang = lang_label(it.get("language"))
+        genres = ", ".join(it.get("genres") or [])
+        sub = " · ".join(x for x in [f"▶ {plat}", lang, genres] if x)
+        ott_rows += _digest_row_html(it["title"], f"🗓 {date_str}", sub, it.get("poster"), it.get("link"))
 
     return (
         '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">'

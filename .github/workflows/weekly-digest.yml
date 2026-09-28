@@ -5,10 +5,20 @@ on:
     - cron: "50 7 * * 6"   # Saturday 07:50 UTC — wakes Render, then sends the weekend digest
   workflow_dispatch:        # allow manual trigger
 
+permissions:
+  actions: write            # needed by the keepalive step to re-enable this workflow
+
 jobs:
   digest:
     runs-on: ubuntu-latest
     steps:
+      - name: Keep schedule alive
+        # GitHub disables scheduled workflows after 60 days without repo activity.
+        # Re-enabling via the API on every run resets that inactivity timer.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/weekly-digest.yml/enable"
+
       - name: Wake up Render and wait for it to be ready
         run: |
           echo "Pinging server to wake it up..."
@@ -25,5 +35,5 @@ jobs:
       - name: Send weekly digest
         run: |
           echo "Triggering weekly digest..."
-          curl -s -X POST --max-time 180 https://cinealert-api.onrender.com/weekly-digest
+          curl -sf -X POST --max-time 180 https://cinealert-api.onrender.com/weekly-digest
           echo "Weekly digest triggered."

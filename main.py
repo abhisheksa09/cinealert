@@ -427,6 +427,9 @@ async def refresh_streaming_cache(days_ahead: int = 45):
             seen.add(key)
             unique.append(item)
 
+    # Add overview, rating, language, genres etc. from TMDB for the OTT cards
+    await enrich_with_tmdb(unique)
+
     p = await get_pool()
     async with p.acquire() as conn:
         await conn.execute(
@@ -602,18 +605,41 @@ async def get_watch_providers(client: httpx.AsyncClient, tmdb_id: int, media_typ
 
 
 async def fetch_tmdb_details(client: httpx.AsyncClient, tmdb_id, media_type: str) -> dict:
-    """Fetch original language + genre names for a title (used to enrich OTT items)."""
+    """Fetch display details for a title (used to enrich OTT items, which the
+    streaming sources return with little more than a title and date)."""
     kind = "movie" if media_type in ("movie", "Movies") else "tv"
     try:
         r = await client.get(f"{TMDB_BASE}/{kind}/{tmdb_id}", params={"api_key": TMDB_KEY}, timeout=10)
         r.raise_for_status()
         d = r.json()
+        year = (d.get("release_date") or d.get("first_air_date") or "")[:4]
         return {
             "language": d.get("original_language"),
             "genres": [g["name"] for g in d.get("genres", [])][:3],
+            "overview": (d.get("overview") or "")[:300],
+            "rating": d.get("vote_average") or None,
+            "year": year or None,
+            "runtime": d.get("runtime") or None,                 # movies, minutes
+            "seasons": d.get("number_of_seasons") or None,       # tv
+            "poster": f"https://image.tmdb.org/t/p/w185{d['poster_path']}" if d.get("poster_path") else None,
         }
     except Exception:
         return {}
+
+
+async def enrich_with_tmdb(items: list) -> None:
+    """Fill in TMDB details on items in place; keeps any value the source already set."""
+    sem = asyncio.Semaphore(10)
+    async with httpx.AsyncClient() as client:
+        async def enrich(it):
+            if not it.get("tmdb_id") or it.get("language"):
+                return
+            async with sem:
+                det = await fetch_tmdb_details(client, it["tmdb_id"], it.get("media_type", "movie"))
+            for k, v in det.items():
+                if v and not it.get(k):
+                    it[k] = v
+        await asyncio.gather(*(enrich(it) for it in items))
 
 
 # ── Daily scan ────────────────────────────────────────────────────────────────
@@ -718,21 +744,10 @@ async def build_weekly_digest():
                 ott_items.append(it)
         ott_items.sort(key=lambda x: x.get("available_date") or "9999-99-99")
 
-    # Cap to what the digest displays, then enrich each with language + genre
-    # via TMDB (the streaming sources don't provide these). TMDB is free/high-limit
-    # and this is a weekly job over ≤12 items, so the extra calls are cheap.
+    # Cap to what the digest displays. Items are normally enriched when the cache
+    # is refreshed; this only fills gaps if that refresh failed.
     ott_items = ott_items[:12]
-    if ott_items:
-        async with httpx.AsyncClient() as client:
-            async def enrich(it):
-                if not it.get("tmdb_id"):
-                    return
-                det = await fetch_tmdb_details(client, it["tmdb_id"], it.get("media_type", "movie"))
-                if det.get("language"):
-                    it["language"] = det["language"]
-                if det.get("genres"):
-                    it["genres"] = det["genres"]
-            await asyncio.gather(*(enrich(it) for it in ott_items))
+    await enrich_with_tmdb(ott_items)
 
     return theatre_unique, ott_items
 

@@ -746,6 +746,11 @@ export default function CineAlert() {
                     const dateStr = item.available_date
                       ? new Date(item.available_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
                       : "Coming Soon";
+                    const langLabel = item.language ? (LANG_CODES[item.language] || item.language.toUpperCase()) : null;
+                    const length = item.media_type === "movie"
+                      ? (item.runtime ? `${Math.floor(item.runtime / 60) ? Math.floor(item.runtime / 60) + "h " : ""}${item.runtime % 60}m` : null)
+                      : (item.seasons ? `${item.seasons} season${item.seasons > 1 ? "s" : ""}` : null);
+                    const details = [item.year, length].filter(Boolean);
                     return (
                       <a key={i} href={item.link || `https://www.themoviedb.org/search?query=${encodeURIComponent(item.title)}`} target="_blank" rel="noreferrer" style={{
                         display: "flex", gap: 14, padding: "12px 14px",
@@ -757,9 +762,9 @@ export default function CineAlert() {
                         onMouseLeave={e => { e.currentTarget.style.borderColor = t.cardBorder; e.currentTarget.style.boxShadow = "none"; }}
                       >
                         {item.poster ? (
-                          <img src={item.poster} alt={item.title} style={{ width: 44, height: 60, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                          <img src={item.poster} alt={item.title} style={{ width: 48, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
                         ) : (
-                          <div style={{ width: 44, height: 60, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🎬</div>
+                          <div style={{ width: 48, height: 64, borderRadius: 8, background: t.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🎬</div>
                         )}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 600, color: isDark ? "#f1f5f9" : "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
@@ -774,10 +779,32 @@ export default function CineAlert() {
                               Coming to {meta.label} · {dateStr}
                             </span>
                           </div>
-                          {item.overview && <div style={{ fontSize: 11, color: t.textMuted, marginTop: 5, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.overview}</div>}
+                          <div style={{ fontSize: 12, color: t.textMuted, marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                            {details.map((d, j) => <span key={j}>{j > 0 && <span style={{ marginRight: 8 }}>·</span>}{d}</span>)}
+                            {item.rating ? <><span>·</span><span style={{ color: "#fbbf24" }}>★ {item.rating.toFixed(1)}</span></> : null}
+                            {langLabel && (
+                              <>
+                                {(details.length > 0 || item.rating) && <span>·</span>}
+                                <span style={{
+                                  fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
+                                  background: isDark ? "#1e293b" : "#f1f5f9",
+                                  color: isDark ? "#94a3b8" : "#64748b",
+                                  border: `1px solid ${t.cardBorder}`,
+                                }}>{langLabel}</span>
+                              </>
+                            )}
+                          </div>
+                          {item.genres && item.genres.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
+                              {item.genres.map(g => (
+                                <span key={g} style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: isDark ? "#1e1e35" : "#ede9fe", color: isDark ? "#a78bfa" : "#7c3aed", fontWeight: 500 }}>{g}</span>
+                              ))}
+                            </div>
+                          )}
+                          {item.overview && <div style={{ fontSize: 12, color: t.textMuted, marginTop: 6, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.overview}</div>}
                         </div>
                         <div style={{ flexShrink: 0 }}>
-                          <span style={{ fontSize: 11, color: t.textMuted, textTransform: "capitalize", background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{item.media_type}</span>
+                          <span style={{ fontSize: 11, color: t.textMuted, background: t.dateBg, padding: "3px 8px", borderRadius: 6 }}>{item.media_type === "movie" ? "Movie" : "Series"}</span>
                         </div>
                       </a>
                     );

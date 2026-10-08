@@ -11,9 +11,13 @@ services:
         sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
-      - key: SMTP_USER
+      - key: RESEND_API_KEY
         sync: false
-      - key: SMTP_PASS
+      - key: RESEND_FROM
+        sync: false
+      - key: WATCHMODE_API_KEY
+        sync: false
+      - key: MOTN_API_KEY
         sync: false
       - key: MY_PLATFORMS
         sync: false

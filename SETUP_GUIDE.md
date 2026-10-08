@@ -1,14 +1,18 @@
-# StreamAlert — Deployment & Setup Guide
+# CineAlert — Deployment & Setup Guide
 
 ## Project structure
 ```
-streamalert/
-├── main.py              ← FastAPI backend (the one you got)
+cinealert/
+├── main.py              ← FastAPI backend (API + weekly digest)
 ├── requirements.txt
-├── render.yaml          ← Render deployment config
+├── runtime.txt          ← Python version for Render
+├── render.yaml          ← Render deployment config for the backend
 ├── .env                 ← local only, never commit
-└── frontend/            ← GitHub Pages static site (React build)
-    └── StreamAlert_Frontend.jsx
+├── .github/workflows/
+│   ├── deploy-backend.yml  ← triggers a Render deploy when backend files change
+│   └── weekly-digest.yml   ← Saturday 07:50 UTC: wakes Render, sends the digest
+└── frontend/            ← React + Vite app (hosted on Render, auto-deploys from main)
+    └── src/CineAlert.jsx   ← the whole UI
 ```
 
 ---
@@ -20,68 +24,52 @@ streamalert/
 
 ---
 
-## 2. Telegram bot
+## 2. Streaming "coming soon" data
+The **Coming to OTT** tab is filled from two providers (cached in the DB, refreshed every 24h):
+
+| Env var | Provider | Platforms |
+|---|---|---|
+| `WATCHMODE_API_KEY` | https://api.watchmode.com | Netflix, Prime Video, Disney+, Apple TV+, HBO Max |
+| `MOTN_API_KEY` | RapidAPI — Streaming Availability (Movie of the Night) | Jio Hotstar, Zee5, SonyLIV |
+
+If `MOTN_API_KEY` is missing or out of quota, Hotstar / Zee5 / SonyLIV show no titles.
+
+---
+
+## 3. Telegram bot
 1. Open Telegram, message `@BotFather`
 2. Send `/newbot`, follow prompts → get your **bot token**
 3. Add to `.env` as `TELEGRAM_BOT_TOKEN=...`
-4. To get your own chat ID: message `@userinfobot`
+4. To get your own chat ID: message `@userinfobot` → `MY_TELEGRAM_ID=...`
 
 ---
 
-## 3. Email (Gmail SMTP)
-1. Enable 2FA on your Gmail account
-2. Go to Google Account → Security → App Passwords → generate one
-3. Add to `.env`:
+## 4. Email (Resend)
+1. Create an account at https://resend.com and generate an API key
+2. Add to `.env`:
    ```
-   SMTP_USER=your@gmail.com
-   SMTP_PASS=your_16_char_app_password
+   RESEND_API_KEY=re_xxxxxxxxxxxx
+   RESEND_FROM=CineAlert <you@yourdomain.com>   # optional, defaults to onboarding@resend.dev
+   MY_EMAIL=you@example.com
    ```
 
 ---
 
-## 4. Neon PostgreSQL
+## 5. Neon PostgreSQL
 1. Create a free project at https://neon.tech
 2. Copy the connection string → add to `.env` as:
    ```
    DATABASE_URL=postgresql+asyncpg://user:pass@ep-xxx.neon.tech/neondb?sslmode=require
    ```
+Tables (`seen_releases`, `streaming_cache`, `api_cache`) are created automatically on startup.
 
 ---
 
-## 5. requirements.txt
+## 6. Digest preferences (env)
 ```
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-asyncpg==0.29.0
-httpx==0.27.0
-python-dotenv==1.0.1
-apscheduler==3.10.4
-aiosmtplib==3.0.1
-python-telegram-bot==21.3
-pydantic[email]==2.7.1
-```
-
----
-
-## 6. render.yaml (deploy to Render free tier)
-```yaml
-services:
-  - type: web
-    name: streamalert-api
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: TMDB_API_KEY
-        sync: false
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
+MY_PLATFORMS=netflix,prime,hbo
+MY_LANGUAGES=English,Hindi
+MY_TYPES=Movies,Series
 ```
 
 ---
@@ -90,8 +78,10 @@ services:
 ```bash
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # fill in your keys
-uvicorn main:app --reload
+uvicorn main:app --reload          # backend on :8000
+
+cd frontend && npm install
+VITE_API_URL=http://localhost:8000 npm run dev
 ```
 
 ---
@@ -99,61 +89,24 @@ uvicorn main:app --reload
 ## 8. API endpoints
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | /users | Register with preferences |
-| PUT | /users/{id} | Update preferences |
-| GET | /users/{id} | Get user preferences |
-| GET | /releases | Preview releases (for frontend) |
-| POST | /scan | Manually trigger scan |
-
-### Example: register a user
-```bash
-curl -X POST http://localhost:8000/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "you@email.com",
-    "telegram_id": "@yourusername",
-    "platforms": ["netflix", "prime", "hbo"],
-    "languages": ["English", "Hindi"],
-    "types": ["Movies", "Series"],
-    "freq": "instant",
-    "notify_new": true,
-    "notify_soon": true
-  }'
-```
+| GET | /health | Liveness ping (used for cold-start detection) |
+| GET | /releases | Upcoming theatrical releases — `languages`, `media_type` (movie/tv) |
+| GET | /released | Already released since `from_year` — `languages`, `media_type` |
+| GET | /streaming-upcoming | Titles arriving on OTT soon — `platforms` |
+| POST | /weekly-digest | Build & send the weekend digest (email + Telegram) |
+| POST | /scan | Manually trigger a release scan |
 
 ---
 
-## 9. Cron schedule
-The scheduler runs automatically inside the FastAPI process:
-- **08:00 UTC** — daily_scan() fetches new releases and sends instant alerts
-- **09:00 UTC** — send_digests() flushes queued messages for digest users
+## 9. Scheduling
+Render's free tier sleeps when idle, so the weekly digest is triggered by the
+`weekly-digest.yml` GitHub Action (Saturday 07:50 UTC) rather than an in-process cron.
+The workflow pings `/health` until the server is awake, then POSTs `/weekly-digest`.
 
-On Render's free tier, the service sleeps after inactivity. Use UptimeRobot to ping `/docs`
-every 14 minutes to keep it awake. Note: this counts toward your monthly hours.
-For the cron to be reliable, consider upgrading to Render's $7/mo Starter plan or
-using a GitHub Actions scheduled workflow as an alternative free cron.
+GitHub disables scheduled workflows after 60 days without repo activity; the workflow
+re-enables itself on every run to prevent that.
 
 ---
 
-## 10. GitHub Actions alternative cron (free)
-Create `.github/workflows/scan.yml`:
-```yaml
-name: Daily OTT scan
-on:
-  schedule:
-    - cron: '0 8 * * *'   # 08:00 UTC
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger scan
-        run: curl -X POST https://your-app.onrender.com/scan
-```
-This wakes the Render service and triggers the scan externally — no UptimeRobot needed.
-
----
-
-## Country note
-The code defaults to `NL` (Netherlands) for watch provider lookups.
-Change `"NL"` in `get_watch_providers()` to `"IN"` to also check Indian availability.
-You can pass both and union the results.
+## Region note
+Watch providers are looked up for India (`IN`) first, falling back to `US`.

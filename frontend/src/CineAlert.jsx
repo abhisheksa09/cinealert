@@ -199,6 +199,10 @@ export default function CineAlert() {
   const [filterSort, setFilterSort] = useState("date");
   const [filterSearch, setFilterSearch] = useState("");
 
+  // Streaming tab filters (kept separate so search/type don't leak between tabs)
+  const [sFilterType, setSFilterType] = useState("all");
+  const [sFilterSearch, setSFilterSearch] = useState("");
+
   // Released tab
   const [released, setReleased] = useState([]);
   const [loadingReleased, setLoadingReleased] = useState(false);
@@ -206,7 +210,6 @@ export default function CineAlert() {
   const [rFilterType, setRFilterType] = useState("all");
   const [rFilterSort, setRFilterSort] = useState("date");
   const [rFilterSearch, setRFilterSearch] = useState("");
-  const [rFilterOpen, setRFilterOpen] = useState(false);
   const [collapsedYears, setCollapsedYears] = useState({});
 
   const t = THEMES[theme];
@@ -257,11 +260,14 @@ export default function CineAlert() {
     const wantMovie = types.includes("Movies");
     const wantTV = types.includes("Series") || types.includes("Anime") || types.includes("Documentaries");
     const fetches = [];
-    if (wantMovie) fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=movie`).then(d => d?.releases || []));
-    if (wantTV)    fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&platforms=${platforms.join(",")}&media_type=tv`).then(d => d?.releases || []));
+    // No languages selected → show nothing (the backend would otherwise fall back to its defaults)
+    if (languages.length) {
+      if (wantMovie) fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&media_type=movie`).then(d => d?.releases || []));
+      if (wantTV)    fetches.push(fetchWithRetry(`${API_BASE}/releases?languages=${languages.join(",")}&media_type=tv`).then(d => d?.releases || []));
+    }
     if (!fetches.length) { setReleases([]); setLoadingReleases(false); }
     else Promise.all(fetches).then(results => setReleases(results.flat())).finally(() => setLoadingReleases(false));
-  }, [serverReady, tab, languages, platforms, types]);
+  }, [serverReady, tab, languages, types]);
 
   useEffect(() => {
     if (!serverReady || tab !== "streaming") return;
@@ -277,8 +283,10 @@ export default function CineAlert() {
     const wantMovie = types.includes("Movies");
     const wantTV = types.includes("Series") || types.includes("Anime") || types.includes("Documentaries");
     const fetches = [];
-    if (wantMovie) fetches.push(fetchWithRetry(`${API_BASE}/released?languages=${languages.join(",")}&media_type=movie&from_year=2020`).then(d => d?.releases || []));
-    if (wantTV)    fetches.push(fetchWithRetry(`${API_BASE}/released?languages=${languages.join(",")}&media_type=tv&from_year=2020`).then(d => d?.releases || []));
+    if (languages.length) {
+      if (wantMovie) fetches.push(fetchWithRetry(`${API_BASE}/released?languages=${languages.join(",")}&media_type=movie&from_year=2020`).then(d => d?.releases || []));
+      if (wantTV)    fetches.push(fetchWithRetry(`${API_BASE}/released?languages=${languages.join(",")}&media_type=tv&from_year=2020`).then(d => d?.releases || []));
+    }
     if (!fetches.length) { setReleased([]); setLoadingReleased(false); return; }
     Promise.all(fetches)
       .then(results => setReleased(results.flat()))
@@ -295,6 +303,65 @@ export default function CineAlert() {
 
   // Rotate the funny message every ~4s while waiting
   const wakeMessage = WAKE_MESSAGES[Math.floor(wakeSeconds / 4) % WAKE_MESSAGES.length];
+
+  const clearChipStyle = {
+    width: 20, height: 20, borderRadius: "50%", border: "none", cursor: "pointer",
+    background: "#444", color: "#ccc", fontSize: 12, lineHeight: 1,
+    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+    marginLeft: 2, transition: "background 0.15s",
+  };
+  const rowLabelStyle = { fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" };
+
+  // Platform logo toggles — shared by the OTT and Out Now tabs
+  const platformRow = (selected, setSelected) => (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+      <span style={rowLabelStyle}>Platforms</span>
+      {PLATFORMS.map(p => {
+        const on = selected.includes(p.id);
+        const meta = PLATFORM_META[p.id];
+        return (
+          <button key={p.id} onClick={() => toggleSet(selected, setSelected, p.id)} title={p.label} style={{
+            width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer",
+            background: on ? "#a0a0a0" : t.inputBg,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "all 0.18s", overflow: "hidden", flexShrink: 0,
+            boxShadow: on ? `0 0 0 2px #a0a0a055` : `0 0 0 1px ${t.cardBorder}`,
+            opacity: on ? 1 : 0.45,
+          }}>
+            {meta?.logo
+              ? <img src={meta.logo} alt={p.label} style={{ width: 18, height: 18, objectFit: "contain", borderRadius: 3 }} />
+              : <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>{meta?.icon}</span>
+            }
+          </button>
+        );
+      })}
+      {selected.length > 0 && (
+        <button onClick={() => setSelected([])} title="Clear platforms" style={clearChipStyle}>×</button>
+      )}
+    </div>
+  );
+
+  // Language chips — shared by the In Theatres and Out Now tabs
+  const languageRow = (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+      <span style={rowLabelStyle}>Languages</span>
+      {LANGUAGES.map(lang => {
+        const on = languages.includes(lang);
+        return (
+          <button key={lang} onClick={() => toggleSet(languages, setLanguages, lang)} style={{
+            padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
+            border: on ? "1.5px solid #0ea5e9" : `1.5px solid ${t.cardBorder}`,
+            background: on ? "#0ea5e9" : t.inputBg,
+            color: on ? "#fff" : t.textMuted,
+            cursor: "pointer", transition: "all 0.18s",
+          }}>{lang}</button>
+        );
+      })}
+      {languages.length > 0 && (
+        <button onClick={() => setLanguages([])} title="Clear languages" style={clearChipStyle}>×</button>
+      )}
+    </div>
+  );
 
   return (
     <div style={{
@@ -514,62 +581,8 @@ export default function CineAlert() {
                   </div>
                 </div>
 
-                {/* Row 3: platforms */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Platforms</span>
-                  {PLATFORMS.map(p => {
-                    const on = platforms.includes(p.id);
-                    const meta = PLATFORM_META[p.id];
-                    return (
-                      <button key={p.id} onClick={() => toggleSet(platforms, setPlatforms, p.id)} title={p.label} style={{
-                        width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer",
-                        background: on ? "#a0a0a0" : t.inputBg,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        transition: "all 0.18s", overflow: "hidden", flexShrink: 0,
-                        boxShadow: on ? `0 0 0 2px #a0a0a055` : `0 0 0 1px ${t.cardBorder}`,
-                        opacity: on ? 1 : 0.45,
-                      }}>
-                        {meta?.logo
-                          ? <img src={meta.logo} alt={p.label} style={{ width: 18, height: 18, objectFit: "contain", borderRadius: 3 }} />
-                          : <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>{meta?.icon}</span>
-                        }
-                      </button>
-                    );
-                  })}
-                  {platforms.length > 0 && (
-                    <button onClick={() => setPlatforms([])} title="Clear platforms" style={{
-                      width: 20, height: 20, borderRadius: "50%", border: "none", cursor: "pointer",
-                      background: "#444", color: "#ccc", fontSize: 12, lineHeight: 1,
-                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                      marginLeft: 2, transition: "background 0.15s",
-                    }}>×</button>
-                  )}
-                </div>
-
-                {/* Row 4: languages */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Languages</span>
-                  {LANGUAGES.map(lang => {
-                    const on = languages.includes(lang);
-                    return (
-                      <button key={lang} onClick={() => toggleSet(languages, setLanguages, lang)} style={{
-                        padding: "4px 11px", borderRadius: 999, fontSize: 11, fontWeight: on ? 700 : 400,
-                        border: on ? "1.5px solid #0ea5e9" : `1.5px solid ${t.cardBorder}`,
-                        background: on ? "#0ea5e9" : t.inputBg,
-                        color: on ? "#fff" : t.textMuted,
-                        cursor: "pointer", transition: "all 0.18s",
-                      }}>{lang}</button>
-                    );
-                  })}
-                  {languages.length > 0 && (
-                    <button onClick={() => setLanguages([])} title="Clear languages" style={{
-                      width: 20, height: 20, borderRadius: "50%", border: "none", cursor: "pointer",
-                      background: "#444", color: "#ccc", fontSize: 12, lineHeight: 1,
-                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                      marginLeft: 2, transition: "background 0.15s",
-                    }}>×</button>
-                  )}
-                </div>
+                {/* Row 3: languages (no platform row — theatrical releases aren't on OTT yet) */}
+                {languageRow}
               </div>
 
               {/* ── Results count ── */}
@@ -662,14 +675,14 @@ export default function CineAlert() {
         {/* STREAMING TAB */}
         {tab === "streaming" && (() => {
           const filteredStreaming = streamingItems.filter(r => {
-            if (filterSearch) {
-              const q = filterSearch.toLowerCase();
+            if (sFilterSearch) {
+              const q = sFilterSearch.toLowerCase();
               if (!(r.title || "").toLowerCase().includes(q) && !(r.overview || "").toLowerCase().includes(q)) return false;
             }
-            if (filterType !== "all" && r.media_type !== filterType) return false;
+            if (sFilterType !== "all" && r.media_type !== sFilterType) return false;
             return true;
           });
-          const hasActiveFilter = filterSearch || filterType !== "all";
+          const hasActiveFilter = sFilterSearch || sFilterType !== "all";
 
           return (
             <div>
@@ -682,56 +695,27 @@ export default function CineAlert() {
                 <div style={{ position: "relative" }}>
                   <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: t.textMuted, pointerEvents: "none" }}>🔍</span>
                   <input
-                    value={filterSearch}
-                    onChange={e => setFilterSearch(e.target.value)}
+                    value={sFilterSearch}
+                    onChange={e => setSFilterSearch(e.target.value)}
                     placeholder="Search titles…"
                     style={{ width: "100%", padding: "8px 10px 8px 32px", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 8, color: t.text, fontSize: 13, outline: "none", boxSizing: "border-box" }}
                   />
-                  {filterSearch && (
-                    <button onClick={() => setFilterSearch("")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: t.textMuted, fontSize: 14, lineHeight: 1 }}>✕</button>
+                  {sFilterSearch && (
+                    <button onClick={() => setSFilterSearch("")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: t.textMuted, fontSize: 14, lineHeight: 1 }}>✕</button>
                   )}
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                   {[{ val: "all", label: "All" }, { val: "movie", label: "🎬 Movies" }, { val: "tv", label: "📺 Series" }].map(opt => (
-                    <button key={opt.val} onClick={() => setFilterType(opt.val)} style={{
-                      padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: filterType === opt.val ? 700 : 400,
-                      border: filterType === opt.val ? "1.5px solid #7c3aed" : `1.5px solid ${t.cardBorder}`,
-                      background: filterType === opt.val ? "#7c3aed" : t.inputBg,
-                      color: filterType === opt.val ? "#fff" : t.textMuted,
+                    <button key={opt.val} onClick={() => setSFilterType(opt.val)} style={{
+                      padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: sFilterType === opt.val ? 700 : 400,
+                      border: sFilterType === opt.val ? "1.5px solid #7c3aed" : `1.5px solid ${t.cardBorder}`,
+                      background: sFilterType === opt.val ? "#7c3aed" : t.inputBg,
+                      color: sFilterType === opt.val ? "#fff" : t.textMuted,
                       cursor: "pointer", transition: "all 0.18s",
                     }}>{opt.label}</button>
                   ))}
                 </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Platforms</span>
-                  {PLATFORMS.map(p => {
-                    const on = platforms.includes(p.id);
-                    const meta = PLATFORM_META[p.id];
-                    return (
-                      <button key={p.id} onClick={() => toggleSet(platforms, setPlatforms, p.id)} title={p.label} style={{
-                        width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer",
-                        background: on ? "#a0a0a0" : t.inputBg,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        transition: "all 0.18s", overflow: "hidden", flexShrink: 0,
-                        boxShadow: on ? `0 0 0 2px #a0a0a055` : `0 0 0 1px ${t.cardBorder}`,
-                        opacity: on ? 1 : 0.45,
-                      }}>
-                        {meta?.logo
-                          ? <img src={meta.logo} alt={p.label} style={{ width: 18, height: 18, objectFit: "contain", borderRadius: 3 }} />
-                          : <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>{meta?.icon}</span>
-                        }
-                      </button>
-                    );
-                  })}
-                  {platforms.length > 0 && (
-                    <button onClick={() => setPlatforms([])} title="Clear platforms" style={{
-                      width: 20, height: 20, borderRadius: "50%", border: "none", cursor: "pointer",
-                      background: "#444", color: "#ccc", fontSize: 12, lineHeight: 1,
-                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                      marginLeft: 2, transition: "background 0.15s",
-                    }}>×</button>
-                  )}
-                </div>
+                {platformRow(platforms, setPlatforms)}
               </div>
 
               {/* Results count */}
@@ -740,7 +724,7 @@ export default function CineAlert() {
                   {loadingStreaming ? "Loading…" : `${filteredStreaming.length}${hasActiveFilter ? ` of ${streamingItems.length}` : ""} titles`}
                 </span>
                 {hasActiveFilter && (
-                  <button onClick={() => { setFilterSearch(""); setFilterType("all"); }} style={{ fontSize: 11, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕ Clear filters</button>
+                  <button onClick={() => { setSFilterSearch(""); setSFilterType("all"); }} style={{ fontSize: 11, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕ Clear filters</button>
                 )}
               </div>
 
@@ -815,7 +799,8 @@ export default function CineAlert() {
               }
               if (rFilterType !== "all" && r.media_type !== rFilterType) return false;
               if (rFilterPlatforms.length > 0) {
-                if (!rFilterPlatforms.some(p => (r.platforms || []).includes(p))) return false;
+                // r.platforms holds display names ("Netflix"), filter holds ids ("netflix")
+                if (!rFilterPlatforms.some(p => (r.platforms || []).includes(PLATFORM_META[p].label))) return false;
               }
               return true;
             })
@@ -876,6 +861,10 @@ export default function CineAlert() {
                     ))}
                   </div>
                 </div>
+
+                {/* Platforms (none selected = all) + languages */}
+                {platformRow(rFilterPlatforms, setRFilterPlatforms)}
+                {languageRow}
               </div>
 
               {/* Count row */}

@@ -278,7 +278,7 @@ async def get_releases(languages: str = "", platforms: str = "", days_ahead: int
 @app.get("/released")
 async def get_released(languages: str = "", media_type: str = "movie", from_year: int = 2020):
     """Already-released titles from from_year up to today, per selected languages."""
-    cache_key = f"released:{languages}:{media_type}:{from_year}"
+    cache_key = f"released:v2:{languages}:{media_type}:{from_year}"
     cached = await cache_get(cache_key)
     if cached is not None:
         return cached
@@ -328,15 +328,18 @@ async def fetch_released(client: httpx.AsyncClient, media_type: str, lang: str, 
     """Fetch already-released titles sorted by release date descending, 2 pages per language."""
     from_date = f"{from_year}-01-01"
     to_date = date.today().isoformat()
-    endpoint = f"{TMDB_BASE}/discover/{'movie' if media_type in ('movie', 'Movies') else 'tv'}"
+    is_tv = media_type not in ("movie", "Movies")
+    endpoint = f"{TMDB_BASE}/discover/{'tv' if is_tv else 'movie'}"
+    # TMDB's TV discover ignores primary_release_date.* — it uses first_air_date.*
+    date_field = "first_air_date" if is_tv else "primary_release_date"
     results = []
     for page in range(1, pages + 1):
         params = {
             "api_key": TMDB_KEY,
             "with_original_language": lang,
-            "primary_release_date.gte": from_date,
-            "primary_release_date.lte": to_date,
-            "sort_by": "primary_release_date.desc",
+            f"{date_field}.gte": from_date,
+            f"{date_field}.lte": to_date,
+            "sort_by": f"{date_field}.desc",
             "vote_count.gte": 10,   # skip obscure/unrated entries
             "region": "IN",
             "page": page,

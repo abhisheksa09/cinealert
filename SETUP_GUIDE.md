@@ -10,8 +10,9 @@ cinealert/
 ├── .env                 ← local only, never commit
 ├── .github/workflows/
 │   ├── deploy-backend.yml  ← triggers a Render deploy when backend files change
+│   ├── pages.yml           ← builds frontend/ and deploys it to GitHub Pages
 │   └── weekly-digest.yml   ← Saturday 07:50 UTC: wakes Render, sends the digest
-└── frontend/            ← React + Vite app (hosted on Render, auto-deploys from main)
+└── frontend/            ← React + Vite app (GitHub Pages: abhisheksa09.github.io/cinealert)
     └── src/CineAlert.jsx   ← the whole UI
 ```
 
